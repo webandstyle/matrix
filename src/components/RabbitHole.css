@@ -1,0 +1,100 @@
+/* the rabbit-hole tunnel: a fixed full-viewport layer ABOVE the stage (z 4,
+   below the grain at 999). It starts transparent (the shader outputs alpha 0
+   until the dive begins) and the portal irises out from the & to fill it. */
+.rabbit {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* ?rabbit placement editor: capture drags so the portal can be dropped on the & */
+.rabbit--editor {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+/* each phase (portal dive, tube ride) is its own full-layer canvas so they can
+   crossfade via wrapper opacity without one blocking the other */
+.rabbit__layer {
+  position: absolute;
+  inset: 0;
+}
+
+.rabbit__canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.rabbit-editor {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 60;
+  width: 260px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(150, 110, 255, 0.35);
+  background: rgba(8, 6, 12, 0.92);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  color: #e8e2f5;
+  pointer-events: auto;
+  cursor: default;
+}
+
+.rabbit-editor__title {
+  letter-spacing: 0.18em;
+  color: #b79aff;
+  margin: 0 0 0.5rem;
+}
+
+.rabbit-editor__hint {
+  margin: 0 0 0.8rem;
+  color: rgba(232, 226, 245, 0.55);
+  line-height: 1.45;
+}
+
+.rabbit-editor__row {
+  display: block;
+  margin-bottom: 0.55rem;
+}
+
+.rabbit-editor__row input[type='range'] {
+  width: 100%;
+  accent-color: #b79aff;
+}
+
+.rabbit-editor__row--check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rabbit-editor__actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.rabbit-editor__actions button {
+  flex: 1;
+  padding: 0.45rem 0;
+  border-radius: 8px;
+  border: 1px solid rgba(150, 110, 255, 0.4);
+  background: rgba(150, 110, 255, 0.14);
+  color: #e8e2f5;
+  font-family: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.rabbit-editor__actions button:hover {
+  background: rgba(150, 110, 255, 0.3);
+}
+
+.rabbit-editor__note {
+  margin-top: 0.5rem;
+  color: #7dff9a;
+}

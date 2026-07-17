@@ -1,0 +1,139 @@
+/* display face for DOM headings that want a distinct brand look
+   (the arrival's "Choose your Path" title) */
+@font-face {
+  font-family: 'Jelvion';
+  src: url('/assets/fonts/Jelvion.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --c-bg: #0a0907;
+  --c-bg-soft: #14110d;
+  --c-text: #f6efe2;
+  --c-text-dim: rgba(246, 239, 226, 0.7);
+  --c-text-faint: rgba(246, 239, 226, 0.46);
+  --c-gold: #c9a24b;
+  --c-gold-soft: #e0c27f;
+  --c-olive: #9b8f4e;
+  --c-violet: #6c4f86;
+  --c-pink: #b06a82;
+
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', Consolas, 'Courier New', monospace;
+  --font-brand: 'Jelvion', 'Space Grotesk', sans-serif;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--c-bg);
+  color: var(--c-text);
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--font-body);
+  font-weight: 300;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  position: relative;
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: var(--font-body);
+  cursor: pointer;
+}
+
+/* film grain, fixed over everything, very subtle */
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.lux-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.9rem 1.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(201, 162, 75, 0.55);
+  background: rgba(20, 17, 13, 0.4);
+  color: var(--c-text);
+  font-size: 0.92rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  transition: border-color 0.3s ease, transform 0.3s ease, background 0.3s ease;
+  backdrop-filter: blur(6px);
+}
+
+.lux-btn:hover {
+  border-color: var(--c-gold-soft);
+  background: rgba(201, 162, 75, 0.1);
+  transform: translateY(-1px);
+}
+
+.lux-btn.primary {
+  background: linear-gradient(135deg, rgba(201, 162, 75, 0.22), rgba(176, 106, 130, 0.18));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lux-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, transparent 40%, rgba(255, 255, 255, 0.16) 50%, transparent 60%);
+    transform: translateX(-120%);
+    transition: transform 0.6s ease;
+  }
+  .lux-btn:hover::after {
+    transform: translateX(120%);
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

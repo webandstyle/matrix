@@ -1,0 +1,513 @@
+/* the stage adds no scroll height of its own — the entrance runway lives in
+   the shared experience scroll-space, so nothing scrolls up from below */
+.choose {
+  position: relative;
+}
+
+/* the stage is a FIXED, full-viewport layer that sits BEHIND the hero canvas
+   (z-index 1 < the hero's 2). It starts hidden (opacity 0) and JS fades it in
+   from ENTRY — which only begins after the journey saturates and the matrix has
+   fully dissolved. So the matrix plays pure → dissolves to dark → the hand
+   arrives pure: the two are NEVER visible at once, and nothing scrolls up. */
+.choose__pin {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  opacity: 0;
+  background:
+    radial-gradient(55% 45% at 50% 42%, rgba(150, 110, 255, 0.07) 0%, transparent 70%),
+    radial-gradient(70% 60% at 82% 85%, rgba(216, 100, 191, 0.05) 0%, transparent 70%),
+    #060409;
+}
+
+/* ?hand editor: bring the stage IN FRONT of the hero canvas so it can be
+   composed from the top of the page without scrolling the journey */
+.choose__pin--editor {
+  z-index: 5;
+}
+
+/* reduced motion: no fixed overlay or scroll trickery — a plain composed
+   panel that simply follows the static hero in normal flow */
+.choose--static .choose__pin {
+  position: relative;
+  height: 100svh;
+  opacity: 1;
+}
+
+
+/* the free stage: logo + hand placed anywhere (drag them in ?hand mode) */
+.choose__stage {
+  position: absolute;
+  inset: 0;
+}
+
+.choose__stage--editor {
+  cursor: grab;
+  touch-action: none;
+}
+
+.choose__stage--editor:active {
+  cursor: grabbing;
+}
+
+/* copy + pills — parked (SHOW_COPY) until the composition is final */
+.choose__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+  text-align: left;
+  max-width: 34rem;
+}
+
+.choose__kicker {
+  font-size: 0.85rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--c-text-faint);
+}
+
+/* the brand mark: transparent W|S portal logo. Width + position (left/top,
+   center-anchored) come inline from the pose store — see ChooseSection */
+.choose__logo {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  width: min(100%, 27rem);
+  container-type: inline-size;
+  z-index: 1;
+}
+
+.choose__logo-img {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 0 44px rgba(150, 110, 255, 0.16));
+  pointer-events: none;
+  user-select: none;
+}
+
+/* in-space logo modes: the 3D canvas draws the logo, the DOM image goes
+   ghost but its box remains the & landing anchor */
+.choose__logo--ghost .choose__logo-img {
+  opacity: 0;
+}
+
+/* the 3D hand layer — a full-screen canvas, the hand lives anywhere in the
+   stage space (x/y world units in the pose store) */
+.choose__hand {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.choose__hand canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ?hand — visual pose editor panel */
+.hand-editor {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 60;
+  width: 280px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(150, 110, 255, 0.35);
+  background: rgba(8, 6, 12, 0.92);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: #e8e2f5;
+  text-align: left;
+  overflow-y: auto;
+}
+
+.hand-editor__title {
+  letter-spacing: 0.18em;
+  color: #b79aff;
+  margin-bottom: 0.7rem;
+}
+
+.hand-editor__title--section {
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(150, 110, 255, 0.2);
+}
+
+.hand-editor__row--color {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.hand-editor__models {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.8rem;
+}
+
+.hand-editor__models button {
+  flex: 1;
+  padding: 0.35rem 0.3rem;
+  border-radius: 7px;
+  border: 1px solid rgba(150, 110, 255, 0.35);
+  background: transparent;
+  color: #e8e2f5;
+  font-family: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.hand-editor__models button.is-active {
+  background: rgba(150, 110, 255, 0.3);
+  border-color: rgba(183, 154, 255, 0.9);
+}
+
+.hand-editor__row--color input[type='color'] {
+  width: 44px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(150, 110, 255, 0.4);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.hand-editor__row {
+  display: block;
+  margin-bottom: 0.55rem;
+}
+
+.hand-editor__row input[type='range'] {
+  width: 100%;
+  accent-color: #b79aff;
+}
+
+.hand-editor__row--check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hand-editor__actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.hand-editor__actions button {
+  flex: 1;
+  padding: 0.45rem 0;
+  border-radius: 8px;
+  border: 1px solid rgba(150, 110, 255, 0.4);
+  background: rgba(150, 110, 255, 0.12);
+  color: #e8e2f5;
+  font-family: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.hand-editor__actions button:hover {
+  background: rgba(150, 110, 255, 0.28);
+}
+
+.hand-editor__note {
+  margin-top: 0.5rem;
+  color: #7dff9a;
+}
+
+.hand-editor__hint {
+  margin-top: 0.6rem;
+  color: rgba(232, 226, 245, 0.55);
+  line-height: 1.45;
+}
+
+/* the & hero's final home — the gold & baked into the logo image. This
+   overlay span sits exactly on top of it: invisible by default, it flashes
+   matrix-green on handoff (it IS the hero we followed), then fades away to
+   reveal the logo's own gold & — the green "melts" into gold.
+   (CodeUniverse targets this span's rect for the landing.) */
+.choose__amp {
+  position: absolute;
+  z-index: 3;
+  left: 49.6%;
+  top: 47.8%;
+  transform: translate(-50%, -50%);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 13.5cqw;
+  line-height: 1;
+  color: #d9ffe4;
+  /* layered glow: a hot near-white core, a green mid, a wide soft bloom */
+  text-shadow:
+    0 0 6px rgba(226, 255, 233, 0.95),
+    0 0 18px rgba(90, 255, 130, 0.75),
+    0 0 44px rgba(77, 255, 106, 0.45);
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  will-change: transform, opacity;
+}
+
+/* premium light: a soft bloom halo behind the glyph (::before), centered and
+   sized in em so it scales with the projected logo. mix-blend screen =
+   additive light over the dark scene. */
+.choose__amp::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  pointer-events: none;
+  border-radius: 50%;
+  opacity: 0;
+  mix-blend-mode: screen;
+  width: 3.6em;
+  height: 3.6em;
+  transform: translate(-50%, -50%) scale(0.5);
+  filter: blur(3px);
+}
+
+/* ARRIVAL: the green & descends into the slot with weight and a graceful
+   settle, its bloom swelling in behind it */
+.choose__amp--green {
+  opacity: 1;
+  transition: none;
+  animation: ampArrive 0.66s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.choose__amp--green::before {
+  background: radial-gradient(
+    circle closest-side,
+    rgba(232, 255, 238, 0.85) 0%,
+    rgba(96, 255, 138, 0.4) 34%,
+    rgba(77, 255, 106, 0) 72%
+  );
+  animation: bloomArrive 0.95s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* MELT: a refined gold-white bloom swells and the glyph flashes warm, then
+   fades to reveal the logo's own gold & */
+.choose__amp--melt {
+  opacity: 1;
+  transition: none;
+  animation: ampMelt 1.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.choose__amp--melt::before {
+  background: radial-gradient(
+    circle closest-side,
+    rgba(255, 249, 233, 0.95) 0%,
+    rgba(255, 216, 146, 0.55) 34%,
+    rgba(255, 196, 110, 0) 72%
+  );
+  animation: bloomFlash 1.3s ease-out forwards;
+}
+
+@keyframes ampArrive {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - 30px)) scale(1.2);
+    filter: blur(1.5px);
+  }
+  58% {
+    opacity: 1;
+    transform: translate(-50%, calc(-50% + 3px)) scale(0.972);
+    filter: blur(0);
+  }
+  80% {
+    transform: translate(-50%, calc(-50% - 1px)) scale(1.007);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes bloomArrive {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.45);
+  }
+  58% {
+    opacity: 0.62;
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+  100% {
+    opacity: 0.44;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes ampMelt {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    color: #d9ffe4;
+    text-shadow: 0 0 6px rgba(226, 255, 233, 0.95), 0 0 18px rgba(90, 255, 130, 0.75), 0 0 44px rgba(77, 255, 106, 0.45);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.12);
+    color: #fff7e6;
+    text-shadow: 0 0 12px rgba(255, 255, 255, 0.95), 0 0 34px rgba(255, 216, 146, 0.95), 0 0 76px rgba(255, 196, 110, 0.65);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.02);
+    color: #ffc978;
+    text-shadow: 0 0 22px rgba(255, 201, 120, 0.4);
+  }
+}
+
+@keyframes bloomFlash {
+  0% {
+    opacity: 0.44;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  18% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(1.55);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2);
+  }
+}
+
+/* in-space logo modes: the anchor is a direct child of the stage — its
+   left/top/font-size come inline, projected from the 3D logo's & slot every
+   frame (HandScene AmpAnchor) */
+.choose__amp--stage {
+  left: 50%;
+  top: 30%;
+  font-size: 96px;
+}
+
+.choose__position {
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-text-dim);
+  /* the big hand reaches below the logo box — keep the line clear of it */
+  margin-top: clamp(3rem, 9svh, 6rem);
+}
+
+.choose__lead {
+  max-width: 34rem;
+  color: var(--c-text-dim);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.choose__pill-line {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  color: rgba(77, 255, 106, 0.75);
+}
+
+.choose__options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.1rem;
+  margin-top: 1.2rem;
+  width: 100%;
+}
+
+/* narrow screens: center the (currently parked) copy */
+@media (max-width: 900px) {
+  .choose__panel {
+    align-items: center;
+    text-align: center;
+    max-width: 36rem;
+    margin: 0 auto;
+  }
+}
+
+.choose__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  text-align: left;
+  padding: 1.8rem 1.7rem;
+  border-radius: 18px;
+  border: 1px solid rgba(201, 162, 75, 0.28);
+  background: rgba(20, 17, 13, 0.55);
+  backdrop-filter: blur(6px);
+  transition: border-color 0.3s ease, transform 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.choose__card:hover {
+  transform: translateY(-3px);
+}
+
+.choose__card--red:hover {
+  border-color: rgba(228, 76, 84, 0.85);
+  background: rgba(228, 76, 84, 0.07);
+  box-shadow: 0 8px 44px rgba(228, 76, 84, 0.18);
+}
+
+.choose__card--blue:hover {
+  border-color: rgba(88, 140, 236, 0.85);
+  background: rgba(88, 140, 236, 0.07);
+  box-shadow: 0 8px 44px rgba(88, 140, 236, 0.18);
+}
+
+/* the pills — capsule shapes with a soft glow */
+.choose__pill {
+  width: 46px;
+  height: 19px;
+  border-radius: 999px;
+  margin-bottom: 0.2rem;
+}
+
+.choose__pill--red {
+  background: linear-gradient(115deg, #ff7a7a 0%, #e43c4a 45%, #8f1420 100%);
+  box-shadow: 0 0 22px rgba(228, 76, 84, 0.55), inset 0 2px 4px rgba(255, 255, 255, 0.35);
+}
+
+.choose__pill--blue {
+  background: linear-gradient(115deg, #8db6ff 0%, #4a7de4 45%, #17348f 100%);
+  box-shadow: 0 0 22px rgba(88, 140, 236, 0.55), inset 0 2px 4px rgba(255, 255, 255, 0.35);
+}
+
+.choose__pill-name {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--c-text-faint);
+}
+
+.choose__card--red .choose__pill-name {
+  color: rgba(255, 138, 145, 0.85);
+}
+
+.choose__card--blue .choose__pill-name {
+  color: rgba(141, 182, 255, 0.85);
+}
+
+.choose__card h2 {
+  font-size: clamp(1.3rem, 2.4vw, 1.7rem);
+}
+
+.choose__card p {
+  color: var(--c-text-dim);
+  font-size: 0.95rem;
+}
+
+.choose__cta {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--c-gold-soft);
+}

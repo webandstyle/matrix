@@ -1,0 +1,95 @@
+# Web & Style — állapot
+
+_Utoljára frissítve: 2026-07-15_
+
+Élő munkanapló: mit csinálunk, merre haladunk, mi a terv. Minden nagyobb lépés után frissül.
+
+---
+
+## 🎯 Most éppen ezen dolgozunk
+
+**A megérkezés-tér újraépítése — „a kert" (2026-07-15).** A választás-elemek (felirat/kezek/aura/mátrix) IDEIGLENESEN ELREJTVE (`SHOW_CHOICE=false` az ArrivalScene-ben) — a teret öltöztetjük fel előbb:
+
+- **KÉSZ — új talaj:** a user új talaj-képe (füves dombok + földút a horizontig, átlátszó ég) → `garden.webp` (2000px, 325KB). Fekete ég egyelőre.
+- **KÉSZ — 3D kerti modellek** (`public/assets/models/garden/`): a user letöltéseiből Blender 5.1 headless-szel FBX→GLB konvertálva (fbx2glb.py a scratchpadben; anyagok: diffuse+normal+alpha-clip), majd gltf-transform optimalizálás (webp 1024 + quantize). 11 modell: grass01-03, grass_dry01-02, grass_flowers01-03, grass_reeds01 (~300-560KB), grasspack (3MB), blossoms (virágfa, 461k tri → err 0.002 simplify → 2.8MB — ha csúnya, van 5.2MB-os err 0.001 változat a %TEMP%-ben).
+- **KÉSZ — 🧪 KERT-LABOR (`?garden`, `GardenItems.jsx`):** paletta (11 modell, kattintás = hozzáadás), a színtérben kattintás = kiválasztás (lila gyűrű a lábánál), húzás = mozgatás (saját raycast, a mélység-síkon), panel-csúszkák: X/Y/Z(mélység)/forgatás X/Y/Z/méret, **FÉNY: környezeti + napfény csúszkák**, Duplikál/Töröl, Mentés/Másolás(JSON)/Reset. A modellek 1 egységre normalizáltak, az aljuk y=0-n áll → a méret-csúszka minden modellnél ugyanazt jelenti. A Másolás JSON-ja: `{light, items}`. **A user elrendezi, JSON-t küld → beégetés (`DEFAULT_ITEMS` + `DEFAULT_LIGHT` a GardenItems.jsx-ben).**
+- **Javítások (2026-07-15):** (1) a talaj-sík `depthTest:false`-a felülfestette az elé húzott modelleket (a „eltűnő virágfa" bug) → depthTest visszakapcsolva (a transparent-pass a mélység alapján enged); ha a kezek visszajönnek, a hz=-8 kezdőmélység a talaj (-6.2) MÖGÜL indulna → át kell majd gondolni. (2) a fekete „füst" köd 25-37%-ot feketített a modelleken („fakó színek") → a kerti modellek anyagai `fog=false`, plusz fényesebb defaultok (amb 1.2 / dir 2.2) és fény-csúszkák.
+- **KÉSZ — kert-elrendezés v4 beégetve (2026-07-15):** 18 elem (v3 + 1 fűcsomó, pár pozíció-finomítás) — márvány szobor a bal dombon, bordó kerti virágok, rétegzett füvek/nádasok, 3 rododendron + levendula jobbra — fény amb 0.45 / dir 2.95.
+- **KÉSZ — fény-irány javítás (2026-07-15, user berajzolta a nap irányát):** a talajkép beégetett fénye BAL-FELÜLRŐL jön, de a 3D fő fény jobbról-elölről (`[3,4,5]`) → a szobor + jobb virágok árnyékos fele nézett a kamera felé (sötét). Javítva: fő nap (meleg `#fff2d8`) `[-7,5,3]` bal-felülről; kitöltő (hideg ég-kék `#bcd2ff`) `[6,2.5,2]` jobbról, `dir*0.32`. Most a modell-árnyékolás egyezik a 2D talajjal. FONTOS: a HMR nem alkalmazza a 3D-jelenet változásait → a usernek hard reload kell (Ctrl+Shift+R).
+- **KÉSZ — szobor-textúra világosítás (2026-07-15):** a fotogrammetriás márvány maga sötét → a `GARDEN_MODELS` statue-hoz `lift: 0.35`; a `GardenModel` a modell saját textúráját emissive-map-ként is ráteszi (`emissive=fehér, emissiveMap=map, emissiveIntensity=lift`) → a kő világosabb, a fény-reakció megmarad. A GardenModel most minden material-t KLÓNOZ (nem a cache-elt GLTF-anyagot módosítja). Bármely modellhez adható `lift`.
+- **KÉSZ — Szobor a palettán (2026-07-15):** `chateau-slavkov-u-brna-statue-1.zip` → **ASCII FBX** (a Blender nem tudja!) → böngészős konverzió (three FBXLoader + GLTFExporter playwright-tal, esm.sh-ról; a fájlok route-injektálással, mert a public-ba másolás EBUSY-val kiütötte a Vite watcherét) → 74.5MB → optimalizálva **1.26MB** (`statue.glb`). **UV-flip bug javítva** (v2): az FBX UV-k bottom-left konvenciójúak, a glTF top-left → V-koordináta flip kellett a geometrián, különben minden a sövény-pixeleket mintázta („camo-massza" minden szögből). Most a kő márványfehér, a sövény zöld. A szken egyoldalas (elölről fotózva): a szobor jó oldala ry≈90 körül, a hátoldala cafatos — elrendezésnél a jó oldalát kell a kamera felé fordítani.
+- **KÉSZ — 4 új növény a palettán (2026-07-15):** a user zipjeiből (projekt-gyökér): **Kerti virág** (vegflower, 1.8MB, Flower/Leaf/Stem anyagok), **Fűszál-csomó** (trawa, OBJ→GLB, 193KB), **Rododendron** (7MB — a legnehezebb, lila virágfürtös bokor, 8 anyag), **Levendula** (187KB). A Blender-scriptbe került egy **fuzzy anyag-bekötő** (anyagnév → textúra-fájl minták, suffix-hámozással: `Flower_MatSG`→Flower, `Leaf01_su_SHD`→Leaf01) — az FBX-ek abszolút útvonalú textúra-hivatkozásai miatt a sima import fehér modelleket adott.
+- **KÉSZ — a glitchelő ég (`GardenSky.jsx`, 2026-07-15):** fullscreen GLSL ég-shader (`ScreenQuad`, renderOrder -100, a talaj mögött; a talaj átlátszó ég-része átengedi, a fű takarja az alját). Tartalom: naplemente-hangulatú kék→meleg gradiens + sodródó `fbm`-felhők + halvány szivárvány-ív. **Glitch:** önjáró időzítéssel (~0.6s blokkok, ~14% fault) néha megremeg — FINOM scan-line eltolás (a felhő/szivárvány sávokban elcsúszik) + ritka zöld kód-klaszterek FOLTOKBAN (low-freq régió-maszkkal, nem teljes-képernyős) + ritka poszterizált sáv. „A rendszer meginog a felszín alatt." A gyakoriság/intenzitás hangolható (a shader tetején: `floor(uTime*1.6)`, `step(0.86,...)`, `gi` skála). Screenshot-tal ellenőrizve (nyugodt ég + force-olt glitch).
+- **KÖVETKEZIK:** szél-mozgás a kerti elemekre (apró + nagyobb lökések); utána a választás-elemek visszakapcsolása (SHOW_CHOICE) az új térben; #agency; piros pill éles URL.
+- Fontok: a user letöltött **Heathergreen** + **Moonscape** display fontokat is → `public/assets/fonts/`, be vannak kötve? (még nincs — ha kell, a felirat-editor FONTS listájába tesszük).
+
+**Korábbi fázis — rabbit hole (kész):** mozgás → a lyuk → cső-utazás → megérkezés → választás-interakciók.
+
+- **KÉSZ: infrastruktúra + 1. rész (mozgás + a lyuk) + portál-editor + 3. rész (a HULLÁMVASÚT-cső).** Egy közös görgetés 3 fázisra bontva (`rabbitRef` az App-ban, a `ScrollDriver` írja; a görgetőtér 1680vh: hero 880 + belépő 180 + rabbit 520). Új `RabbitHole` fix réteg (z-index 4) egy fullscreen pszichedelikus **alagút-shaderrel**: a portál középpontja (`uCenter`) állítható, onnan **nyílik ki** (írisz), és beszippant egy varratmentes örvény-alagútba. `rabbitRef` 0→1 vezérli. **`?rabbit` editor:** a portál elhelyezése húzással + csúszkákkal (cx/cy), fázis-rögzítéssel; Mentés/Másolás(JSON)/Reset.
+- **Portál beégetve:** cx 0.629, cy 0.097 (a &-en). A kijárat (fekete közép) a mélyüléssel **a képközépre csúszik**.
+- **KÉSZ — 3. rész: a HULLÁMVASÚT-cső (`TubeRide.jsx`, 2026-07-14).** Az elejei útvonal-alapú utazás mechanizmusa (CatmullRom görbe + Frenet-frame kamera-rig a görbén) újraépítve, de a cső falai a régi mockup-kártyák helyett **pszichedelikus belső shader** (BackSide `TubeGeometry`). A görbe: a portálból tengelyközépen indul → kitekeredik és **hullámvasútként** leng (függőleges emelkedés/süllyedés) → a végén **visszaegyenesedik a tengelyre** (smoothstep-pel, hogy a sugár ÉS a meredeksége is 0 legyen → tiszta egyenes cső). A kamera ráfut az egyenes szakaszra és **lenéz rajta egy sötét, KÖZÉPRE eső kör-kijáratra** — abból repülünk ki. A rabbit-fázison belül: 0→0.14 portál-írisz, 0.14→0.24 portál→cső keresztúsztatás (wrapper-opacity), 0.16→0.92 a cső-utazás (~3-4 scroll), 0.92→1.0 a sötét kijárat kitartva → átadási pont a 4. résznek. Buktatók javítva: a kamera nem érhet a görbe elszívott csúcsáig (különben üres/átlátszó kép) → `CAM_END=0.8` + look-target a tengely-csúcsra keverve; opak sötét háttér, hogy a kijárat fekete legyen ne a színpad látszódjon; a cső radiális UV-varratát megszüntettük (cos/sin-periodikus fbm).
+- **KÉSZ — 4. rész (megérkezés) (`ArrivalScene.jsx`, 2026-07-14):** negyedik scroll-fázis (`arrivalRef` + `ARRIVAL_VH=420`, a cső után; scroll-tér 1680→2100vh; `RABBIT_END` a `ScrollDriver`-ben). Fekete tér a cső sötét kijáratából (z-index 5), a jelenet egyetlen 3D Canvas. **Kert háttér:** a user által adott virágös­vény-kép (`garden.webp`, 2.6MB png→240KB webp böngészővel konvertálva) egy háttér-síkon, mindig leghátul (depthTest/Write false, renderOrder −10), állítható pozíció/mélység/méret. **3D felirat** (drei `<Text>`, nem DOM): teljesen szerkeszthető — szöveg átírható, **font-váltás** (Jelvion/Milker/Metropolis/Alap), szín, méret, 3D pozíció (X/Y/Z-mélység) + forgatás (X/Y/Z) → „a kertbe téve, 3D jelleggel". Jobbról a **pill-kéz** (a modell KÉT kezet tartalmaz: piros pill bal, kék pill jobb) a mélyből (füstből) előre tolva + fade-in. Modell: `pillhand.glb` 11.9MB→**986KB** (eredeti emberi textúra). Kéz-értékek beégetve (hx1.65/hs1.6/hz-8/rx7/ry-12). **`?arrival` editor:** felirat (szöveg/font/szín/méret/pozíció/forgatás), kert (pozíció/mélység/méret), kéz (pozíció/méret/mélység/forgatás), fázis-rögzítés; Mentés/Másolás/Reset. Font: `--font-brand` (Jelvion) az index.css-ben.
+- **KÉSZ — 5. rész fő elemei (2026-07-14):**
+  - **Megállt mátrix-függöny** (`MatrixCurtain`): fagyott, NAGYON halvány zöld kód-oszlopok a fekete égen (DOM canvas, z-index 0, a 3D jelenet MÖGÖTT), ~9mp-enként egy oszlop fogy egy karakterrel; opacity arrivalRef 0.45→0.85. Halkítva (0.28/0.12/0.06 alfák).
+  - **Auralátás** (`AuraVision`, ScreenQuad shader a megérkezés-canvasban, renderOrder 10): foltos „migrénes aura" — cikkcakkos szivárvány-ívek (fortifikációs spektrum) 4 fix folton a periférián + egy folt **a kurzort követve**, gyors vibrálással (8-10Hz), hue-ciklussal; arrivalRef 0.5→0.9 alatt úszik be, visszafogott (max alfa ~0.42).
+  - **Kattintható kezek:** saját raycast a canvas pointer-eseményein (az r3f per-objektum handlerek megbízhatatlanok voltak a klónozott primitíven) — a találati pont LOKÁLIS X-e dönt: bal kéz (piros pirula) → **mind-jungle**, jobb kéz (kék pirula) → `#agency`. Hover = pointer kurzor. A réteg csak arrivalRef>0.55-nél veszi át a pointert.
+  - **Mind-jungle megtalálva:** `C:\Users\hibyr\portf\creative-cortex-refactored` („Creative Cortex" — ott `npm run dev` → **localhost:5173**). A `RED_PILL_URL` konstans az ArrivalScene-ben — élesítéskor cserélni az éles URL-re. Teszteléshez a jungle-nek futnia kell!
+  - **Suspense-watchdog:** kb. minden 3. friss sessionben a megérkezés 3D jelenete beragadt betöltéskor (verseny, hiba nélkül) — ha 2.5mp után nincs kész, a kulcsolt Suspense újramountol (meleg cache → azonnali felépülés, max 3 próba).
+  - **HÁTRA/hangolás:** a user helyezgeti az elemeket; kék pirula célja (#agency szekció) még nem létezik; piros pill éles URL később.
+- **Kert-fény javítás (2026-07-14, user: „nagyon halott a fény a mezőn"):** a `GardenBg` custom shaderre váltva (fényerő/telítettség/kontraszt uniform-ok, textúra NoColorSpace) — az élénkítés hangolható a `?arrival`-ban (fényerő/telítettség/kontraszt csúszkák). Az új, 2×-élesebb kertkép (`garden.webp` 2000px, 381KB) betöltve.
+
+---
+
+## ✅ Kész (legutóbbi → régebbi)
+
+- **Rabbit hole 5. rész — választás-képernyő fő elemei (2026-07-14):** lásd fent (mátrix-függöny + auralátás + kattintható kezek + mind-jungle bekötés + watchdog). Beégetett cfg: hx1.65/hy0.05/hs1.8/rx27/ry-27; kert-fény shader (fényerő/telítettség/kontraszt csúszkák).
+- **Rabbit hole 4. rész — megérkezés alap (2026-07-14):** lásd fent. `src/components/ArrivalScene.jsx` + `.css` (új), `pillhand.glb` (986KB), Jelvion font, negyedik scroll-fázis. A pill-kéz füstből előre-tolása + a Choose your Path felirat balra, `?arrival` editorral (pozíció + forgatás). A user hangolja a végleges elrendezést.
+- **Rabbit hole 3. rész — a hullámvasút-cső (2026-07-14):** lásd fent. `src/components/TubeRide.jsx` (új) + a `RabbitHole` most két rétegű (portál-dive canvas + cső-ride canvas, wrapper-opacity keresztúsztatás). A régi `src/experience/TunnelScene.jsx` (halott kód) NEM éledt fel — a mechanizmusát írtam újra tisztán a rabbit-hole esztétikához. Pszichedelikus, varratmentes, a sötét kijárat középre esik.
+- **Cső-olvashatóság javítás (2026-07-14, user visszajelzés: „eltévedtem a csőben, mintha kívülről nézném"):** az első verzió kívülről-nézetnek tűnt. Javítva, hogy BELÜLRŐL érződjön: (1) szelídebb tekeredés — `COIL_R` 5→1.8, tágabb+hosszabb cső (`TUBE_RADIUS`4.4, `TUBE_LEN`120) → a kamera mélyen a csőben, lágy banking-kanyarok éles kampók helyett; (2) a kamera a görbén ELŐRÉBB néz (`getPointAt(p+0.13)`), nem az érintőre → a mélypont középen marad, látni ahogy előtted kanyarodik; (3) csillapított dőlés (a fel-irány a világ-felfelé felé húzva, hogy ne pörögjön); (4) shader mélység-jelzők: hosszanti csíkok (a lyukhoz futnak össze) + feléd rohanó gyűrűk. Ez a kombó adja az alagút-érzetet — ne rontsuk el.
+- **Belépő „kürt/beállás" bug javítás (2026-07-14, user: „belépéskor már látom a végét, csak ~2 görgetés után áll be"):** a cső a bejáratnál magába csavarodott (csigaház/kürt), és csak a tekeredés után lett tiszta. Megoldás: a görbe most 3 zónás egy sugár-burokkal (`r = COIL_R * smoothstep(t,0.22,0.45) * (1-smoothstep(t,0.58,0.8))`): EGYENES belépő (tiszta mély zuhanás, a vég a ködben = végtelen-érzet) → banking KÖZÉP → EGYENES kijárat (középső sötét lyuk). `TURNS` 1.3→0.85 (lágy S-kanyar, nem teljes hurok, ami spirálba csavarodna), és a portál→cső átúsztatás összébb húzva (`smooth(rr,0.15,0.22)`), hogy a cső opak háttere gyorsan eltakarja a színpadot.
+- **Prémium landolás (2026-07-13):** a zöld `&` **bezuhan** a helyére (súlyozott, elegáns beérkezés), gazdag rétegzett izzással + lágy **bloom-glóriával** mögötte, majd egy visszafogott arany-fehér villanással válik eggyé a logó saját `&`-jével. CSS: rétegzett glow + `::before` bloom-glória, keyframe-ekkel; a CodeUniverse handoff vezérli. (A fény-gyűrűt kivettük — nem kellett.)
+- **Átmenet finomítás — nincs dupla-expozíció (2026-07-13):** a z-index-takarás mellett is átütött a kéz a feloldódó mátrixon. Javítva: a színpad opacityje a **progress farkához** kötve (0.973→0.995), így végig rejtve marad a feloldódás alatt, és csak akkor úszik be, amikor a mátrix eltűnt. Új sorrend: tiszta mátrix → a magányos zöld `&` lebeg a sötétben (átvezet) → a kéz a sötétből úszik be. A mátrix és a kéz **soha nincs egyszerre a képen**.
+- **Egybefüggő oldal — nincs több vágás, nincs áttűnés (2026-07-13):** a hero és a színpad eddig két külön görgetési szekció volt, a színpad alulról felgörgött (fekete vágósáv). Most **egyetlen 1160vh görgetőtér** vezérli az egészet: a `ScrollDriver` két megosztott refet ír (`progressRef` = hero, `entryRef` = színpad-belépő, `JOURNEY_SPLIT=0.83`). A `.choose__pin` fix, teljes képernyős réteg, ami **a hero canvas MÖGÖTT** ül (z-index 1 vs 2), végig opacity 1-en. Amíg a mátrix megy (átlátszatlan), teljesen takarja a színpadot → a mátrix tisztán játszik. A `&` landolásakor a mátrix **feloldódik és alóla előtűnik** a kéz — ez az eredeti, kedvelt „& érkezés", csak vágás nélkül. Nincs semmilyen réteg-áttűnés (a user kérése: „nem kell ez a fade in fade out"). Editorban a színpad előre ugrik (z-index 5) és entry=1.
+- **`&` landolás időzítése (2026-07-13):** a zöld `&` végig **rejtve** marad a zuhanás és a logó leereszkedése alatt; csak az utolsó kockában villan fel a logó saját `&`-helyén, majd aranyba olvad. (User: „amíg nincs logó, addig bután néz ki magában.")
+- **`&` horgony a 3D logóhoz (2026-07-13):** a landolási pont (`.choose__amp`) a térbeli logó-módokban a logó saját `&`-jét célozza — `AmpAnchor` minden képkockában kivetíti a 3D pozíciót a képernyőre. Editor-csúszkák: `& horgony X/Y/méret` (ax/ay/as = 0.05 / -0.01 / 0.18).
+- **Belépő koreográfia — logó az utolsó mozdulat (2026-07-12):** kéz „benő" egyedül (scale-cheat, váll marad a képen kívül) → felirat felúszik → logó fentről ereszkedik a tenyérbe. Görgetésre, pinned runway-en.
+- **Szabad színpad kompozíció:** transzparens logó + szobor-kéz (chróm-magenta), 3D „WEB & STYLE" (Milker) + „CREATIVE WEB EXPERIENCE STUDIO" (Metropolis) feliratok, kód-univerzum gömb, csillagpor + glow + fénycsíkok.
+- **`?hand` editor:** húzható elemek (logó/kéz/felirat 1-2) + minden érték csúszkán; Mentés / Másolás (JSON) / Reset.
+- **Hero-utazás (korábbról):** kártyafal-mátrix → dot-globe headline → kód-terminál → mátrix-eső → `&` kitör és zuhan (hullám-splash + két „wave fact") → landol a logóban.
+
+---
+
+## 📋 Terv / következő lépések
+
+1. **Finomhangolás:** ha a `&` illesztés vagy a mozgás időzítése még csiszolandó — user küldi a JSON-t, beégetem.
+2. **Copy + pill kártyák visszahozása:** `SHOW_COPY = false` jelenleg parkolva. Ha a kompozíció végleges, visszatesszük a szövegeket és a piros/kék pill kártyákat a színpadra.
+3. **Piros pill URL:** a „Immersive web experience" (mind-jungle) linkje — user adja meg.
+4. **`#agency` szekció** megépítése (kék pill célja).
+5. **Kéz interakció:** kurzorkövetés + lebegés (`mv` flag megvan, kikapcsolva) — később bekapcsoljuk.
+6. **Nyelvváltó (HU/EN):** stringek megvannak a content.js-ben, switcher hiányzik.
+7. **Bundle-splitting** (~1.5MB unsplit, deferred), **git init + deploy** (Vercel).
+
+---
+
+## 🅿️ Elparkolva későbbre
+
+- **Kéz ujj-riggelés (2026-07-13):** többórás mellékszál, későbbre téve. Két út: (1) a szobor-kéz saját riggelése — működött, de az automatikus súlyozás nem elég tiszta; (2) **egy rendesen riggelt asset** (`first-person-hands-rigged.zip`, 63 csont, 3 perc/ujj) — ez a **folytatás útja**. Épült egy `/rig` labor-oldal (élő ujj-csúszkák), de kivettük a projektből (a three.js átnevezi a glTF csont-neveket → a csont-illesztést javítani kell folytatáskor). Részletek a projekt-memóriában. A Blender MCP (`/mcp` → `blender` connected) bekötve maradt.
+
+## ⚠️ Ismert / halasztott
+
+- Bundle nincs kódra bontva (build figyelmeztet, működik).
+- `dist/` build után törölhető (user konvenció).
+- Régi teszt-szkript `shot7.mjs` journey-mapping elcsúszott a +150svh runway miatt (a friss `amptest.mjs` / `melttest.mjs` helyes).
+
+---
+
+## 🔧 Kulcs-fájlok
+
+- `src/components/HandScene.jsx` — R3F színpad: kéz, logó, feliratok, kód-gömb, `AmpAnchor`, `?hand` editor.
+- `src/components/ChooseSection.jsx` — a szekció, pinned runway, `entryRef`, drag, `&` horgony span.
+- `src/experience/CodeUniverse.jsx` — mátrix-eső, `&` zuhanás, landolás/handoff logika.
+- `src/components/RabbitHole.jsx` — a rabbit-hole fix réteg: portál-dive shader (`Tunnel`) + a cső-réteg beemelése (`TubeRide`), keresztúsztatás, `?rabbit` editor, `DEFAULT_CFG` (portál pozíció).
+- `src/components/TubeRide.jsx` — 3. rész: a hullámvasút-cső (CatmullRom görbe + Frenet kamera-rig + pszichedelikus BackSide shader). Hangolható konstansok fent: `TUBE_LEN/TURNS/COIL_R/TUBE_RADIUS`, `TUBE_IN/TUBE_OUT/CAM_END` (a rabbit-fázison belüli időzítés).
+- `src/components/ArrivalScene.jsx` + `.css` — 4. rész: a megérkezés (fekete tér, „Choose your Path" felirat, pill-kéz füstből előre). `DEFAULT_CFG` (felirat + kéz pozíció/méret/mélység/forgatás), `?arrival` editor. A pill-modell: `/assets/models/pillhand.glb`.
+- Scroll-fázisok: `HERO_VH/ENTRY_VH/RABBIT_VH/ARRIVAL_VH` (Experience.jsx) → `HERO_END/ENTRY_END/RABBIT_END` raw-törtek; a `ScrollDriver` (SpinScene.jsx) írja a 4 refet. `.experience__scroll-space` magasság = SCROLL_VH (2100vh), szinkronban tartani!
+- `DEFAULT_POSE` (HandScene.jsx) — minden hardcode-olt érték; user JSON-jei ide kerülnek.
