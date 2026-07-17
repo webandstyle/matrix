@@ -4,10 +4,10 @@ import { ScreenQuad } from '@react-three/drei'
 import * as THREE from 'three'
 
 // The garden sky: the "seemingly beautiful surface" — a late-afternoon blue→warm
-// gradient, drifting clouds and a soft rainbow — that the system underneath keeps
-// glitching through. Every so often the image faults: scan-lines slip, a band
-// posterizes, and matrix-green code blocks flash ("the system starting to
-// wobble before the choice"). Fullscreen ScreenQuad, drawn hindmost behind the
+// gradient, drifting clouds and a soft rainbow — a fake LED-wall surface hiding
+// the system underneath. It faults only where a butterfly physically hits it:
+// the panel flexes, scan-lines slip and readable Matrix-green code glyphs leak
+// through. Fullscreen ScreenQuad, drawn hindmost behind the
 // ground plate (renderOrder -100), so the transparent-sky area of the ground
 // image reveals it while the grass covers the lower half.
 
@@ -21,6 +21,7 @@ const FRAG = /* glsl */ `
   uniform vec2 uRes;
   uniform vec2 uHit;      // butterfly tap point (0..1 screen, y up)
   uniform float uHitAmp;  // decaying pulse strength of the latest tap
+  uniform float uHitSeed;
 
   float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
   float noise(vec2 p){
@@ -33,6 +34,35 @@ const FRAG = /* glsl */ `
     float s = 0., a = 0.5;
     for (int i = 0; i < 6; i++){ s += a * noise(p); p = p * 2.03 + 7.1; a *= 0.5; }
     return s;
+  }
+
+  float segment(vec2 p, vec2 a, vec2 b, float width){
+    vec2 pa = p - a, ba = b - a;
+    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return 1.0 - smoothstep(width, width + 0.035, length(pa - ba * h));
+  }
+
+  // Tiny vector glyphs: 0, 1, < and >. They stay readable even while the
+  // surrounding image tears, so the fault clearly exposes code, not noise.
+  float codeGlyph(vec2 p, float id){
+    float g = 0.0;
+    if (id < 0.25){
+      g = max(g, segment(p, vec2(-.26,.32), vec2(.26,.32), .065));
+      g = max(g, segment(p, vec2(-.26,-.32), vec2(.26,-.32), .065));
+      g = max(g, segment(p, vec2(-.28,-.28), vec2(-.28,.28), .065));
+      g = max(g, segment(p, vec2(.28,-.28), vec2(.28,.28), .065));
+    } else if (id < 0.5){
+      g = max(g, segment(p, vec2(0.0,-.34), vec2(0.0,.34), .07));
+      g = max(g, segment(p, vec2(-.18,.18), vec2(0.0,.34), .07));
+      g = max(g, segment(p, vec2(-.2,-.34), vec2(.2,-.34), .06));
+    } else if (id < 0.75){
+      g = max(g, segment(p, vec2(.24,.34), vec2(-.24,0.0), .07));
+      g = max(g, segment(p, vec2(-.24,0.0), vec2(.24,-.34), .07));
+    } else {
+      g = max(g, segment(p, vec2(-.24,.34), vec2(.24,0.0), .07));
+      g = max(g, segment(p, vec2(.24,0.0), vec2(-.24,-.34), .07));
+    }
+    return g;
   }
 
   // the whole "pretty" sky (gradient + clouds + rainbow) at a uv
@@ -79,24 +109,46 @@ const FRAG = /* glsl */ `
     float gi = local * uHitAmp;
     float fl = floor(uTime * 22.0);                // fast flicker while faulting
 
+    // The sky behaves like a struck LED wall: a pressure ripple travels out
+    // from the exact butterfly contact, briefly exposing the pixel lattice.
+    vec2 radial = dh / max(dist, 0.001);
+    float ripple = sin(dist * 115.0 - (1.0 - uHitAmp) * 18.0)
+                 * exp(-dist * 13.0) * uHitAmp;
+    float panelGridX = smoothstep(0.465, 0.5, abs(fract(uv.x * uRes.x / 8.0) - 0.5));
+    float panelGridY = smoothstep(0.465, 0.5, abs(fract(uv.y * uRes.y / 8.0) - 0.5));
+    float panelGrid = max(panelGridX, panelGridY) * local * uHitAmp;
+
     // scan-line slip on rows crossing the impact
     float row = floor(uv.y * 130.0);
     float slip = (hash(vec2(row, fl)) - 0.5) * gi * 0.09
                * step(0.4, hash(vec2(row * 1.7, fl + 3.0)));
-    vec2 suv = vec2(uv.x + slip, uv.y);
+    vec2 suv = vec2(uv.x + slip, uv.y) + radial * ripple * 0.006;
 
     vec3 col = skyColor(suv, aspect);
 
     if (gi > 0.004){
-      // matrix-green code cells bursting out of the impact
-      vec2 cell = floor(vec2(uv.x * 82.0, uv.y * 50.0));
-      float code = step(0.74, hash(cell + fl));
-      col = mix(col, vec3(0.30, 1.0, 0.5), code * gi * 0.7);
+      // Recognizable code characters in broken vertical clusters. Character
+      // choice and visibility flicker, but glyph shapes remain readable.
+      vec2 codeUv = vec2(uv.x * aspect, uv.y) * vec2(42.0, 32.0);
+      vec2 cell = floor(codeUv);
+      vec2 glyphUv = fract(codeUv) - 0.5;
+      float charId = hash(cell + uHitSeed * 17.3);
+      float glyph = codeGlyph(glyphUv, charId);
+      float column = step(0.38, hash(vec2(cell.x * 0.73, uHitSeed * 9.1)));
+      float alive = step(0.34, hash(cell + floor(fl * 0.22) + uHitSeed));
+      float code = glyph * column * alive;
+      vec3 codeGreen = mix(vec3(0.18, 0.9, 0.38), vec3(0.72, 1.0, 0.78), hash(cell + fl));
+      col = mix(col, codeGreen, code * gi * 0.96);
+      col += vec3(0.08, 0.5, 0.16) * panelGrid * 0.42;
       // posterize the disc → digital stair-stepping
       col = mix(col, floor(col * 7.0) / 7.0, gi * 0.45);
+      // expanding contact ring: the point where the insect hit the panel
+      float ringRadius = mix(0.025, 0.28, 1.0 - uHitAmp);
+      float ring = 1.0 - smoothstep(0.008, 0.025, abs(dist - ringRadius));
+      col += vec3(0.36, 1.0, 0.55) * ring * uHitAmp * 0.75;
       // a bright pixel-flash core right at the tap
       float core = smoothstep(0.09, 0.0, dist) * uHitAmp;
-      col += vec3(0.45, 1.0, 0.6) * core * 0.6;
+      col += vec3(0.65, 1.0, 0.72) * core * 0.82;
     }
 
     gl_FragColor = vec4(col, 1.0);
@@ -112,6 +164,7 @@ export default function GardenSky({ reduceMotion, hitRef }) {
       uRes: { value: new THREE.Vector2(1, 1) },
       uHit: { value: new THREE.Vector2(0.5, 0.7) },
       uHitAmp: { value: 0 },
+      uHitSeed: { value: 1 },
     }),
     [],
   )
@@ -126,7 +179,8 @@ export default function GardenSky({ reduceMotion, hitRef }) {
     if (hit && !reduceMotion) {
       const age = state.clock.elapsedTime - hit.t
       m.uniforms.uHit.value.set(hit.x, hit.y)
-      m.uniforms.uHitAmp.value = Math.max(0, 1 - age / 0.8) // ~0.8s decay
+      m.uniforms.uHitSeed.value = hit.seed || 1
+      m.uniforms.uHitAmp.value = Math.max(0, 1 - age / 1.35) // code lingers long enough to read
     } else {
       m.uniforms.uHitAmp.value = 0
     }

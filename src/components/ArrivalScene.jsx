@@ -515,6 +515,7 @@ function Stage({
           editorLab={lab}
           onSelect={onSelect}
           onMove={onMove}
+          reduceMotion={reduceMotion}
         />
         <Butterflies hitRef={hitRef} reduceMotion={reduceMotion} />
         {SHOW_CHOICE && <Title3D arrivalRef={arrivalRef} cfgRef={cfgRef} editor={editor} ui={ui} />}

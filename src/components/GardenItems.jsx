@@ -1,34 +1,47 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 
 // 3D garden set dressing on the 2D ground plate: grass tufts, flowers, reeds
 // and the blossom tree, hand-arranged by the user in the GardenLab editor
 // (?garden). Instances live as plain objects; the lab writes localStorage and
-// the final arrangement gets baked into DEFAULT_ITEMS. Wind motion comes later.
+// the final arrangement gets baked into DEFAULT_ITEMS. Per-model root-pivot
+// wind keeps the planted bases fixed while the foliage moves.
 
 export const GARDEN_MODELS = [
-  { key: 'grass01', name: 'Fű 1', url: '/assets/models/garden/grass01.glb' },
-  { key: 'grass02', name: 'Fű 2', url: '/assets/models/garden/grass02.glb' },
-  { key: 'grass03', name: 'Fű 3', url: '/assets/models/garden/grass03.glb' },
-  { key: 'grass_dry01', name: 'Száraz fű 1', url: '/assets/models/garden/grass_dry01.glb' },
-  { key: 'grass_dry02', name: 'Száraz fű 2', url: '/assets/models/garden/grass_dry02.glb' },
-  { key: 'grass_flowers01', name: 'Virágos fű 1', url: '/assets/models/garden/grass_flowers01.glb' },
-  { key: 'grass_flowers02', name: 'Virágos fű 2', url: '/assets/models/garden/grass_flowers02.glb' },
-  { key: 'grass_flowers03', name: 'Virágos fű 3', url: '/assets/models/garden/grass_flowers03.glb' },
-  { key: 'grass_reeds01', name: 'Nádas', url: '/assets/models/garden/grass_reeds01.glb' },
-  { key: 'grasspack', name: 'Fű-csomag', url: '/assets/models/garden/grasspack.glb' },
-  { key: 'blossoms', name: 'Virágfa', url: '/assets/models/garden/blossoms.glb' },
-  { key: 'vegflower', name: 'Kerti virág', url: '/assets/models/garden/vegflower.glb' },
-  { key: 'trawa', name: 'Fűszál-csomó', url: '/assets/models/garden/trawa.glb' },
-  { key: 'rhodo', name: 'Rododendron', url: '/assets/models/garden/rhodo.glb' },
-  { key: 'lavender', name: 'Levendula', url: '/assets/models/garden/lavender.glb' },
+  { key: 'grass01', name: 'Fű 1', url: '/assets/models/garden/grass01.glb', wind: 'grass' },
+  { key: 'grass02', name: 'Fű 2', url: '/assets/models/garden/grass02.glb', wind: 'grass' },
+  { key: 'grass03', name: 'Fű 3', url: '/assets/models/garden/grass03.glb', wind: 'grass' },
+  { key: 'grass_dry01', name: 'Száraz fű 1', url: '/assets/models/garden/grass_dry01.glb', wind: 'grass' },
+  { key: 'grass_dry02', name: 'Száraz fű 2', url: '/assets/models/garden/grass_dry02.glb', wind: 'grass' },
+  { key: 'grass_flowers01', name: 'Virágos fű 1', url: '/assets/models/garden/grass_flowers01.glb', wind: 'grass' },
+  { key: 'grass_flowers02', name: 'Virágos fű 2', url: '/assets/models/garden/grass_flowers02.glb', wind: 'grass' },
+  { key: 'grass_flowers03', name: 'Virágos fű 3', url: '/assets/models/garden/grass_flowers03.glb', wind: 'grass' },
+  { key: 'grass_reeds01', name: 'Nádas', url: '/assets/models/garden/grass_reeds01.glb', wind: 'reeds' },
+  { key: 'grasspack', name: 'Fű-csomag', url: '/assets/models/garden/grasspack.glb', wind: 'grass' },
+  { key: 'blossoms', name: 'Virágfa', url: '/assets/models/garden/blossoms.glb', wind: 'tree' },
+  { key: 'vegflower', name: 'Kerti virág', url: '/assets/models/garden/vegflower.glb', wind: 'flower' },
+  { key: 'trawa', name: 'Fűszál-csomó', url: '/assets/models/garden/trawa.glb', wind: 'reeds' },
+  { key: 'rhodo', name: 'Rododendron', url: '/assets/models/garden/rhodo.glb', wind: 'shrub' },
+  { key: 'lavender', name: 'Levendula', url: '/assets/models/garden/lavender.glb', wind: 'flower' },
   // the photogrammetry marble reads dark; lift = emissive self-glow from its own
   // texture so the stone brightens (keeps the light response, just a lighter base)
   { key: 'statue', name: 'Szobor', url: '/assets/models/garden/statue.glb', lift: 0.35 },
 ]
 const MODEL_BY_KEY = Object.fromEntries(GARDEN_MODELS.map((m) => [m.key, m]))
+
+// Root-pivot wind profiles in radians. The normalized models all stand with
+// their lowest point at y=0, so this bends them from the soil instead of making
+// them float. Flexible blades travel furthest; dense shrubs and trees barely
+// yield. A spatially delayed gust is layered over the quiet, asynchronous air.
+const WIND_PROFILES = {
+  grass: { x: 0.018, z: 0.038, gust: 0.09, speed: 0.9 },
+  reeds: { x: 0.024, z: 0.052, gust: 0.12, speed: 0.78 },
+  flower: { x: 0.014, z: 0.03, gust: 0.065, speed: 0.66 },
+  shrub: { x: 0.006, z: 0.012, gust: 0.028, speed: 0.46 },
+  tree: { x: 0.004, z: 0.009, gust: 0.02, speed: 0.34 },
+}
 
 export const ITEMS_KEY = 'ws-garden-items'
 // the baked arrangement (the user sends the lab's JSON and we harden it here —
@@ -132,13 +145,45 @@ const GardenModel = memo(function GardenModel({ url, lift = 0 }) {
 
 // the in-canvas layer: renders every instance; in lab mode it also runs the
 // select + drag interaction with its own raycaster (same pattern as the pills)
-export function GardenItems({ items, selectedId, editorLab, onSelect, onMove }) {
+export function GardenItems({ items, selectedId, editorLab, onSelect, onMove, reduceMotion }) {
   const { gl, camera } = useThree()
   const groupRefs = useRef(new Map())
+  const windRefs = useRef(new Map())
   const itemsRef = useRef(items)
   itemsRef.current = items
   const selRef = useRef(selectedId)
   selRef.current = selectedId
+
+  useFrame((state, delta) => {
+    const t = state.clock.elapsedTime
+    for (const item of itemsRef.current) {
+      const node = windRefs.current.get(item.id)
+      const profile = WIND_PROFILES[MODEL_BY_KEY[item.m]?.wind]
+      if (!node || !profile) continue
+      if (reduceMotion) {
+        node.rotation.set(0, 0, 0)
+        continue
+      }
+
+      // Stable per-instance phase keeps neighbouring plants from moving as a
+      // synchronized block. The gust carrier is shared, but x/z delay makes it
+      // visibly pass across the garden like one coherent pocket of air.
+      const seed = item.id * 1.61803398875
+      const breeze = Math.sin(t * profile.speed + seed)
+      const flutter = Math.sin(t * profile.speed * 2.37 + seed * 2.13)
+      const gustCarrier = Math.max(
+        0,
+        Math.sin(t * 0.48 - item.x * 0.1 + item.z * 0.035 + 0.4),
+      )
+      const gust = Math.pow(gustCarrier, 9)
+        * (0.82 + 0.18 * Math.sin(t * 2.8 + seed))
+      const targetX = breeze * profile.x + flutter * profile.x * 0.28 + gust * profile.gust * 0.28
+      const targetZ = breeze * profile.z + flutter * profile.z * 0.22 + gust * profile.gust
+
+      node.rotation.x = THREE.MathUtils.damp(node.rotation.x, targetX, 4.5, delta)
+      node.rotation.z = THREE.MathUtils.damp(node.rotation.z, targetZ, 4.0, delta)
+    }
+  })
 
   useEffect(() => {
     if (!editorLab) return undefined
@@ -213,14 +258,21 @@ export function GardenItems({ items, selectedId, editorLab, onSelect, onMove }) 
           key={i.id}
           ref={(g) => { if (g) groupRefs.current.set(i.id, g); else groupRefs.current.delete(i.id) }}
           position={[i.x, i.y, i.z]}
-          rotation={[
-            THREE.MathUtils.degToRad(i.rx || 0),
-            THREE.MathUtils.degToRad(i.ry || 0),
-            THREE.MathUtils.degToRad(i.rz || 0),
-          ]}
-          scale={i.s}
         >
-          <GardenModel url={MODEL_BY_KEY[i.m].url} lift={MODEL_BY_KEY[i.m].lift || 0} />
+          <group
+            ref={(g) => { if (g) windRefs.current.set(i.id, g); else windRefs.current.delete(i.id) }}
+          >
+            <group
+              rotation={[
+                THREE.MathUtils.degToRad(i.rx || 0),
+                THREE.MathUtils.degToRad(i.ry || 0),
+                THREE.MathUtils.degToRad(i.rz || 0),
+              ]}
+              scale={i.s}
+            >
+              <GardenModel url={MODEL_BY_KEY[i.m].url} lift={MODEL_BY_KEY[i.m].lift || 0} />
+            </group>
+          </group>
           {editorLab && i.id === selectedId && (
             // selection ring at the item's feet
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
