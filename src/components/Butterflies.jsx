@@ -15,9 +15,11 @@ const B_URL = '/assets/models/garden/butterfly_b.glb'
 const SKY_Z = -4.6 // the "LED wall" depth the butterflies tap
 
 // each butterfly's flight parameters (drift over the upper sky, occasional taps)
+// fz drives the climb toward the sky wall — keep it lively (a low fz means a
+// tap only every ~48s, which reads as "the glitch never happens")
 const PATHS = [
-  { cx: -1.6, cy: 2.2, cz: -3.0, ax: 2.6, ay: 0.9, az: 1.7, fx: 0.17, fy: 0.31, fz: 0.13, ph: 0.0, flap: 13, roll: 0.5 },
-  { cx: 2.1, cy: 2.6, cz: -3.3, ax: 2.9, ay: 1.1, az: 1.9, fx: 0.14, fy: 0.27, fz: 0.11, ph: 2.3, flap: 15, roll: -0.4 },
+  { cx: -1.6, cy: 1.5, cz: -3.0, ax: 2.6, ay: 0.7, az: 1.7, fx: 0.17, fy: 0.31, fz: 0.55, ph: 0.0, flap: 13, roll: 0.5 },
+  { cx: 2.1, cy: 1.8, cz: -3.3, ax: 2.9, ay: 0.8, az: 1.9, fx: 0.14, fy: 0.27, fz: 0.45, ph: 2.3, flap: 15, roll: -0.4 },
 ]
 
 function Butterfly({ url, path, index, hitRef, reduceMotion }) {
@@ -77,8 +79,8 @@ function Butterfly({ url, path, index, hitRef, reduceMotion }) {
 
     // TAP the sky at the climb peak → write the screen-space hit + a pulse
     tapCooldown.current -= delta
-    if (climb > 0.6 && tapCooldown.current <= 0 && hitRef) {
-      tapCooldown.current = 0.5 // TEMP dense for testing (final: ~2.5)
+    if (climb > 0.85 && tapCooldown.current <= 0 && hitRef) {
+      tapCooldown.current = 2.5 // one tap per climb; ~6s between glitches overall
       proj.current.copy(cur).project(camera)
       hitRef.current = {
         x: proj.current.x * 0.5 + 0.5,

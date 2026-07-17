@@ -126,11 +126,10 @@ export default function GardenSky({ reduceMotion, hitRef }) {
     if (hit && !reduceMotion) {
       const age = state.clock.elapsedTime - hit.t
       m.uniforms.uHit.value.set(hit.x, hit.y)
-      m.uniforms.uHitAmp.value = Math.max(0, 1 - age / 0.55) // ~0.55s decay
+      m.uniforms.uHitAmp.value = Math.max(0, 1 - age / 0.8) // ~0.8s decay
     } else {
       m.uniforms.uHitAmp.value = 0
     }
-    m.uniforms.uHit.value.set(0.5, 0.55); m.uniforms.uHitAmp.value = 0.8 // TEMP debug force
   })
   return (
     <ScreenQuad renderOrder={-100}>
