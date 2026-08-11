@@ -2,12 +2,15 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
+import { singularityState, CODE_DISSOLVE_PARS, CODE_DISSOLVE_FRAG } from './Singularity'
 
 // 3D garden set dressing on the 2D ground plate: grass tufts, flowers, reeds
 // and the blossom tree, hand-arranged by the user in the GardenLab editor
 // (?garden). Instances live as plain objects; the lab writes localStorage and
-// the final arrangement gets baked into DEFAULT_ITEMS. Per-model root-pivot
-// wind keeps the planted bases fixed while the foliage moves.
+// the final arrangement gets baked into DEFAULT_ITEMS. Every instance with a
+// wind profile bends per-vertex from its own planted base (see the BEND_*
+// shader chunks and GardenModel below) — a real cantilever curve, not a
+// whole-object pivot rotation.
 
 export const GARDEN_MODELS = [
   { key: 'grass01', name: 'Fű 1', url: '/assets/models/garden/grass01.glb', wind: 'grass' },
@@ -31,10 +34,11 @@ export const GARDEN_MODELS = [
 ]
 const MODEL_BY_KEY = Object.fromEntries(GARDEN_MODELS.map((m) => [m.key, m]))
 
-// Root-pivot wind profiles in radians. The normalized models all stand with
-// their lowest point at y=0, so this bends them from the soil instead of making
-// them float. Flexible blades travel furthest; dense shrubs and trees barely
-// yield. A spatially delayed gust is layered over the quiet, asynchronous air.
+// Bend-angle profiles in radians — the angle the TIP of each species reaches
+// at full sway (see BEND_COMMON: the shader ramps 0 at the planted base up to
+// this angle at the top). Flexible blades travel furthest; dense shrubs and
+// trees barely yield. A spatially delayed gust is layered over the quiet,
+// asynchronous air. Models without an entry here (the statue) never bend.
 const WIND_PROFILES = {
   grass: { x: 0.018, z: 0.038, gust: 0.09, speed: 0.9 },
   reeds: { x: 0.024, z: 0.052, gust: 0.12, speed: 0.78 },
@@ -42,6 +46,110 @@ const WIND_PROFILES = {
   shrub: { x: 0.006, z: 0.012, gust: 0.028, speed: 0.46 },
   tree: { x: 0.004, z: 0.009, gust: 0.02, speed: 0.34 },
 }
+// ONE prevailing direction for the whole garden — real wind blows one way at a
+// time. Converted per-instance into that instance's own LOCAL space (see
+// localWindDir below) before reaching the shader, so this single world bias
+// reads as the same real-world wind direction across every plant regardless
+// of how each one is individually rotated. Z carries more weight (bends the
+// top toward/away left-right on screen — the classic legible "grass in the
+// wind" silhouette); X adds a smaller toward/away-camera lean.
+const WIND_DIR = { x: 0.5, z: 1 }
+
+// ---- Per-vertex wind bend --------------------------------------------
+// Every instance with a WIND_PROFILES entry bends per-vertex in its own
+// shader instead of rotating as one rigid whole: the angle ramps from 0 at
+// the planted base to the full sway angle at the tip (see BEND_COMMON), so
+// the plant visibly curves instead of tipping over like a stiff plank. The
+// deformation is injected via onBeforeCompile into GardenModel's own,
+// already-cloned material (see GardenModel) — never the shared cached GLTF
+// material, so it can never leak into other instances of the same model.
+
+// bottom fraction of the plant's height that stays essentially still (the
+// "planted" base) before the bend weight starts ramping up
+const BEND_LOCK_FRAC = 0.2
+
+// world WIND_DIR converted into one item's LOCAL space by undoing its own
+// yaw/tilt (rx/ry/rz) — the per-vertex bend operates on raw (pre-rotation)
+// mesh-local vertices, so without this every instance would appear to bend
+// toward a different apparent direction depending on how it's individually
+// rotated in the garden
+function localWindDir(rx, ry, rz) {
+  const q = new THREE.Quaternion()
+    .setFromEuler(new THREE.Euler(
+      THREE.MathUtils.degToRad(rx || 0),
+      THREE.MathUtils.degToRad(ry || 0),
+      THREE.MathUtils.degToRad(rz || 0),
+      'XYZ',
+    ))
+    .invert()
+  const v = new THREE.Vector3(WIND_DIR.x, 0, WIND_DIR.z).applyQuaternion(q)
+  return { x: v.x, z: v.z }
+}
+
+// A mesh's transform relative to `root` (its own model, e.g. a GardenModel
+// instance), built by multiplying each ancestor's OWN local `.matrix` on the
+// way up — deliberately NOT `.matrixWorld`. matrixWorld reflects the object's
+// place in the LIVE scene graph, which is only as fresh as the last time the
+// renderer walked the whole tree; reading it inside a mount effect races that
+// walk (some instances' effects ran before their ancestors' world matrices
+// were ever computed, others after) and the outcome differed silently across
+// instances — bend uniforms baked from a stale/identity ancestor matrix on
+// one item, correct ones on the next, with no visible reason why one instance
+// looked bent and the neighbour looked rigid. Walking only `model`'s own
+// subtree sidesteps that timing entirely.
+function meshLocalToModel(root, node) {
+  const chain = []
+  for (let n = node; n && n !== root; n = n.parent) chain.unshift(n)
+  const m = new THREE.Matrix4()
+  for (const c of chain) {
+    c.updateMatrix()
+    m.multiply(c.matrix)
+  }
+  return m
+}
+
+// uYMin/uYMax come from the WHOLE model's bounding box (mapped into each
+// mesh's own local space — see the onBeforeCompile setup in GardenModel),
+// never a submesh's own box, so a multi-mesh plant bends as one coherent
+// organism instead of each part re-measuring its own 0..1 height.
+const BEND_COMMON = /* glsl */ `
+  uniform float uBendX;
+  uniform float uBendZ;
+  uniform float uYMin;
+  uniform float uYMax;
+
+  // 0 across the rooted base, then a smoothed (Hermite, cubic) ease up to 1
+  // at the tip, squared for an even stronger top-load — deep into the blade
+  // barely anything moves, the tip does most of the work.
+  float wsBendWeight(float y) {
+    float h = clamp((y - uYMin) / max(uYMax - uYMin, 1e-5), 0.0, 1.0);
+    float w = smoothstep(${BEND_LOCK_FRAC.toFixed(2)}, 1.0, h);
+    return w * w;
+  }
+
+  // small-angle rotation only, no translation (safe for both positions,
+  // relative to the pivot, and normals) — Z then X, matching the composition
+  // order three.js's default XYZ Euler gives the old rotation.x/rotation.z
+  vec3 wsBendRotate(vec3 v, float ax, float az) {
+    float cz = cos(az), sz = sin(az);
+    vec3 q = vec3(v.x * cz - v.y * sz, v.x * sz + v.y * cz, v.z);
+    float cx = cos(ax), sx = sin(ax);
+    return vec3(q.x, q.y * cx - q.z * sx, q.y * sx + q.z * cx);
+  }
+`
+const BEND_NORMAL = /* glsl */ `
+  {
+    float w = wsBendWeight(position.y);
+    objectNormal = wsBendRotate(objectNormal, uBendX * w, uBendZ * w);
+  }
+`
+const BEND_POSITION = /* glsl */ `
+  {
+    float w = wsBendWeight(transformed.y);
+    vec3 rel = transformed - vec3(0.0, uYMin, 0.0);
+    transformed = wsBendRotate(rel, uBendX * w, uBendZ * w) + vec3(0.0, uYMin, 0.0);
+  }
+`
 
 export const ITEMS_KEY = 'ws-garden-items'
 // the baked arrangement (the user sends the lab's JSON and we harden it here —
@@ -59,7 +167,15 @@ export const DEFAULT_ITEMS = [
   { m: 'rhodo', x: 4.77, y: -2.57, z: -2, rx: 0, ry: 0, rz: 0, s: 1.65 },
   { m: 'grass_flowers03', x: -1.86, y: -1.45, z: -2, rx: 0, ry: -61, rz: 0, s: 1.45 },
   { m: 'lavender', x: 2.8, y: -3.35, z: -3.8, rx: 0, ry: 0, rz: 0, s: 2.45 },
-  { m: 'statue', x: -5.53, y: -1.6, z: -4.3, rx: -90, ry: 0, rz: -42, s: 3 },
+  // z pulled from -4.3 to -1.3 — in front of the title's z:-3 plane (see
+  // ArrivalScene DEFAULT_CFG.sz) so the statue overlaps the letters too. It
+  // needs to sit noticeably closer than the flowers (z≈-2) that already read
+  // correctly in front of the text: the statue's own rx:-90/rz:-42 (needed to
+  // stand the lying-down photogrammetry scan upright — the GLB's OWN node
+  // already carries a baked-in -90° correction on top of that) means its `z`
+  // field doesn't map 1:1 to visual depth the way it does for unrotated
+  // items — confirmed empirically in the lab, occlusion itself works fine.
+  { m: 'statue', x: -5.53, y: -1.6, z: -1.3, rx: -90, ry: 0, rz: -42, s: 3 },
   { m: 'vegflower', x: -4.6, y: -2.85, z: -2, rx: 20, ry: -95, rz: 19, s: 1.85 },
   { m: 'vegflower', x: -2.74, y: -2.85, z: -2, rx: -21, ry: -88, rz: -28, s: 2.05 },
   { m: 'grass_flowers02', x: -3.37, y: -4.03, z: -7.3, rx: 0, ry: -69, rz: 0, s: 3.7 },
@@ -107,9 +223,15 @@ export function withIds(items) {
 // one model, normalized so its largest dimension is exactly 1 world unit and
 // its BOTTOM sits at y=0 — the scale slider means the same for every model and
 // items "stand" on their y position
-const GardenModel = memo(function GardenModel({ url, lift = 0 }) {
+const GardenModel = memo(function GardenModel({ url, lift = 0, bend, singularity }) {
   const { scene } = useGLTF(url)
+  const size = useThree((s) => s.size)
   const model = useMemo(() => scene.clone(true), [scene])
+  const bendShadersRef = useRef([])
+  // every patched material's compiled shader (for the code-dissolve uniforms —
+  // superset of bendShadersRef, which is only the bending ones)
+  const patchShadersRef = useRef([])
+  const bendAngleRef = useRef({ x: 0, z: 0 })
   useEffect(() => {
     // the black "smoke" fog belongs to the hands' entrance — on the garden
     // set dressing it just sinks the colors toward black (the "washed out"
@@ -128,6 +250,123 @@ const GardenModel = memo(function GardenModel({ url, lift = 0 }) {
       }
     })
   }, [model, lift])
+  // Patches THIS instance's already-cloned materials (never the shared
+  // cached GLTF ones) to bend per-vertex instead of rotating as one rigid
+  // piece. Runs after the effect above so it sees the cloned materials.
+  // Deps are the individual bend VALUES (not the `bend` object itself, which
+  // is a fresh literal every GardenItems render) so an unrelated re-render
+  // (e.g. selecting a different item in the lab) doesn't force a shader
+  // recompile on every bending instance in the garden.
+  useEffect(() => {
+    // build the whole model's box purely from its own geometry + local
+    // transforms (see meshLocalToModel) — no dependency on scene-graph
+    // attachment/render timing. Only needed when bending.
+    const box = new THREE.Box3()
+    if (bend) {
+      model.traverse((o) => {
+        if (!o.isMesh || !o.geometry) return
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox()
+        box.union(o.geometry.boundingBox.clone().applyMatrix4(meshLocalToModel(model, o)))
+      })
+    }
+    const bendShaders = []
+    const patchShaders = []
+    model.traverse((o) => {
+      if (!o.isMesh || !o.material) return
+      // vertex-displaced geometry can exceed the loader's static bounds —
+      // don't let it get frustum-culled while mid-bend at the screen edge
+      o.frustumCulled = false
+      // this mesh's own local Y range for the SHARED (whole-model) height
+      // range above, so multiple submeshes at different heights still bend
+      // against one common top/bottom instead of each their own 0..1 slice
+      const pos = new THREE.Vector3()
+      const quat = new THREE.Quaternion()
+      const scl = new THREE.Vector3()
+      meshLocalToModel(model, o).decompose(pos, quat, scl)
+      const yMin = (box.min.y - pos.y) / (scl.y || 1)
+      const yMax = (box.max.y - pos.y) / (scl.y || 1)
+      o.material.onBeforeCompile = (shader) => {
+        // the wind bend (vertex) — only for species with a wind profile
+        if (bend) {
+          shader.uniforms.uBendX = { value: 0 }
+          shader.uniforms.uBendZ = { value: 0 }
+          shader.uniforms.uYMin = { value: yMin }
+          shader.uniforms.uYMax = { value: yMax }
+          shader.vertexShader = shader.vertexShader
+            .replace('#include <common>', `${BEND_COMMON}\n#include <common>`)
+            .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${BEND_NORMAL}`)
+            .replace('#include <begin_vertex>', `#include <begin_vertex>\n${BEND_POSITION}`)
+          bendShaders.push(shader)
+        }
+        // the singularity code-dissolve (fragment) — EVERY garden material, so
+        // the plants AND the statue turn into purple code and shatter
+        shader.uniforms.uCode = { value: 0 }
+        shader.uniforms.uBurst = { value: 0 }
+        shader.uniforms.uCodeRes = { value: new THREE.Vector2(1, 1) }
+        shader.uniforms.uCodeTime = { value: 0 }
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', `${CODE_DISSOLVE_PARS}\n#include <common>`)
+          .replace('#include <dithering_fragment>', `#include <dithering_fragment>\n${CODE_DISSOLVE_FRAG}`)
+        patchShaders.push(shader)
+      }
+      o.material.needsUpdate = true
+    })
+    bendShadersRef.current = bendShaders
+    patchShadersRef.current = patchShaders
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed on primitive values, see comment above
+  }, [model, bend?.profile, bend?.seed, bend?.dir?.x, bend?.dir?.z, bend?.gustX, bend?.gustZ])
+  useFrame((state, delta) => {
+    const t = state.clock.elapsedTime
+    // the singularity code-dissolve — EVERY patched material (plants + statue).
+    // Computes the shared post-storm state and pushes uCode/uBurst so the
+    // surface resolves into purple code, then erodes away.
+    if (patchShadersRef.current.length > 0 && singularity) {
+      const storm = singularity.stormRef?.current
+      const cfg = singularity.cfgRef?.current
+      const preview = singularity.editor && cfg?.sgPreview === 1
+      let st = null
+      if (preview) st = singularityState(0, cfg, true, cfg?.sgAt ?? 0)
+      else if (storm?.triggered && storm.startedAt != null) {
+        st = singularityState(t - storm.startedAt, cfg, false)
+      }
+      const code = st ? st.code : 0
+      const burst = st ? st.burst : 0
+      for (const sh of patchShadersRef.current) {
+        if (!sh.uniforms.uCode) continue
+        sh.uniforms.uCode.value = code
+        sh.uniforms.uBurst.value = burst
+        sh.uniforms.uCodeTime.value = singularity.reduceMotion ? 0 : t
+        sh.uniforms.uCodeRes.value.set(size.width, size.height)
+      }
+    }
+    if (!bend || bendShadersRef.current.length === 0) return
+    if (bend.reduceMotion) {
+      bendAngleRef.current.x = 0
+      bendAngleRef.current.z = 0
+    } else {
+      // same sway/flutter/gust timing as the rigid wind loop below — only
+      // WHERE it's applied (per-vertex here) changes, not the rhythm
+      const sway = 0.5 + 0.5 * Math.sin(t * bend.profile.speed + bend.seed)
+      const flutter = Math.sin(t * bend.profile.speed * 2.37 + bend.seed * 2.13)
+      const gustCarrier = Math.max(
+        0,
+        Math.sin(t * 0.48 - bend.gustX * 0.1 + bend.gustZ * 0.035 + 0.4),
+      )
+      const gust = Math.pow(gustCarrier, 9) * (0.82 + 0.18 * Math.sin(t * 2.8 + bend.seed))
+      const targetX = bend.dir.x * bend.profile.x * sway
+        + flutter * bend.profile.x * 0.12
+        + gust * bend.profile.gust * 0.28 * bend.dir.x
+      const targetZ = bend.dir.z * bend.profile.z * sway
+        + flutter * bend.profile.z * 0.12
+        + gust * bend.profile.gust * bend.dir.z
+      bendAngleRef.current.x = THREE.MathUtils.damp(bendAngleRef.current.x, targetX, 4.5, delta)
+      bendAngleRef.current.z = THREE.MathUtils.damp(bendAngleRef.current.z, targetZ, 4.0, delta)
+    }
+    for (const shader of bendShadersRef.current) {
+      shader.uniforms.uBendX.value = bendAngleRef.current.x
+      shader.uniforms.uBendZ.value = bendAngleRef.current.z
+    }
+  })
   const norm = useMemo(() => {
     const box = new THREE.Box3().setFromObject(model)
     const size = box.getSize(new THREE.Vector3())
@@ -145,45 +384,19 @@ const GardenModel = memo(function GardenModel({ url, lift = 0 }) {
 
 // the in-canvas layer: renders every instance; in lab mode it also runs the
 // select + drag interaction with its own raycaster (same pattern as the pills)
-export function GardenItems({ items, selectedId, editorLab, onSelect, onMove, reduceMotion }) {
+export function GardenItems({ items, selectedId, editorLab, onSelect, onMove, reduceMotion, stormRef, cfgRef, editor }) {
   const { gl, camera } = useThree()
+  // shared singularity inputs handed to every model's code-dissolve (stable so
+  // the memoized GardenModel isn't churned by it)
+  const sgProps = useMemo(
+    () => ({ stormRef, cfgRef, editor, reduceMotion }),
+    [stormRef, cfgRef, editor, reduceMotion],
+  )
   const groupRefs = useRef(new Map())
-  const windRefs = useRef(new Map())
   const itemsRef = useRef(items)
   itemsRef.current = items
   const selRef = useRef(selectedId)
   selRef.current = selectedId
-
-  useFrame((state, delta) => {
-    const t = state.clock.elapsedTime
-    for (const item of itemsRef.current) {
-      const node = windRefs.current.get(item.id)
-      const profile = WIND_PROFILES[MODEL_BY_KEY[item.m]?.wind]
-      if (!node || !profile) continue
-      if (reduceMotion) {
-        node.rotation.set(0, 0, 0)
-        continue
-      }
-
-      // Stable per-instance phase keeps neighbouring plants from moving as a
-      // synchronized block. The gust carrier is shared, but x/z delay makes it
-      // visibly pass across the garden like one coherent pocket of air.
-      const seed = item.id * 1.61803398875
-      const breeze = Math.sin(t * profile.speed + seed)
-      const flutter = Math.sin(t * profile.speed * 2.37 + seed * 2.13)
-      const gustCarrier = Math.max(
-        0,
-        Math.sin(t * 0.48 - item.x * 0.1 + item.z * 0.035 + 0.4),
-      )
-      const gust = Math.pow(gustCarrier, 9)
-        * (0.82 + 0.18 * Math.sin(t * 2.8 + seed))
-      const targetX = breeze * profile.x + flutter * profile.x * 0.28 + gust * profile.gust * 0.28
-      const targetZ = breeze * profile.z + flutter * profile.z * 0.22 + gust * profile.gust
-
-      node.rotation.x = THREE.MathUtils.damp(node.rotation.x, targetX, 4.5, delta)
-      node.rotation.z = THREE.MathUtils.damp(node.rotation.z, targetZ, 4.0, delta)
-    }
-  })
 
   useEffect(() => {
     if (!editorLab) return undefined
@@ -253,14 +466,13 @@ export function GardenItems({ items, selectedId, editorLab, onSelect, onMove, re
 
   return (
     <>
-      {items.map((i) => (
-        <group
-          key={i.id}
-          ref={(g) => { if (g) groupRefs.current.set(i.id, g); else groupRefs.current.delete(i.id) }}
-          position={[i.x, i.y, i.z]}
-        >
+      {items.map((i) => {
+        const profile = WIND_PROFILES[MODEL_BY_KEY[i.m]?.wind]
+        return (
           <group
-            ref={(g) => { if (g) windRefs.current.set(i.id, g); else windRefs.current.delete(i.id) }}
+            key={i.id}
+            ref={(g) => { if (g) groupRefs.current.set(i.id, g); else groupRefs.current.delete(i.id) }}
+            position={[i.x, i.y, i.z]}
           >
             <group
               rotation={[
@@ -270,18 +482,30 @@ export function GardenItems({ items, selectedId, editorLab, onSelect, onMove, re
               ]}
               scale={i.s}
             >
-              <GardenModel url={MODEL_BY_KEY[i.m].url} lift={MODEL_BY_KEY[i.m].lift || 0} />
+              <GardenModel
+                url={MODEL_BY_KEY[i.m].url}
+                lift={MODEL_BY_KEY[i.m].lift || 0}
+                singularity={sgProps}
+                bend={profile ? {
+                  profile,
+                  seed: i.id * 1.61803398875,
+                  dir: localWindDir(i.rx, i.ry, i.rz),
+                  gustX: i.x,
+                  gustZ: i.z,
+                  reduceMotion,
+                } : null}
+              />
             </group>
+            {editorLab && i.id === selectedId && (
+              // selection ring at the item's feet
+              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+                <ringGeometry args={[0.55, 0.62, 40]} />
+                <meshBasicMaterial color="#b79aff" transparent opacity={0.9} depthTest={false} />
+              </mesh>
+            )}
           </group>
-          {editorLab && i.id === selectedId && (
-            // selection ring at the item's feet
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-              <ringGeometry args={[0.55, 0.62, 40]} />
-              <meshBasicMaterial color="#b79aff" transparent opacity={0.9} depthTest={false} />
-            </mesh>
-          )}
-        </group>
-      ))}
+        )
+      })}
     </>
   )
 }

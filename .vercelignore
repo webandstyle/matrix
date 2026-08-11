@@ -1,0 +1,14 @@
+# asset sources at the repo root — never needed by the build, 257 MB of them
+/*.zip
+/*.glb
+/*.mp4
+/*.jpg
+/*.jpeg
+/Screenshot*.png
+
+raw-assets
+tools
+status.md
+CLAUDE.md
+.agents
+.claude

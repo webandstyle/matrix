@@ -12,6 +12,8 @@ import {
 } from './GardenItems'
 import GardenSky from './GardenSky'
 import Butterflies from './Butterflies'
+import StormShake from './StormShake'
+import { SingularityVortex, singularityState, patchCodeDissolve, CODE_DISSOLVE_PARS, CODE_DISSOLVE_FRAG } from './Singularity'
 import './ArrivalScene.css'
 
 // Part 4 of the rabbit hole: THE ARRIVAL. We emerge from the tube's dark exit
@@ -23,21 +25,28 @@ import './ArrivalScene.css'
 // title (text / font / size / depth / position / rotation) and the hand
 // (position / scale / depth / rotation), with a phase freeze for tuning.
 
-// the choice layer (title, pill-hands, aura, matrix curtain) is PARKED while
-// the garden space is being rebuilt — flip back on once the world is dressed.
-// The matrix returns differently: hidden in the sky/clouds/rainbow as small
-// glitches and surfacing code, the system faltering before the choice.
-const SHOW_CHOICE = false
+// The garden is dressed now (plants, sky-glitch, butterflies) — title + the
+// pill-hand are back on so they can be tuned to the finished space. The old
+// standalone matrix curtain is gone for good (the matrix returns differently
+// now, folded into the sky as small glitches and surfacing code via
+// GardenSky/Butterflies — that already IS "the system faltering before the
+// choice"). The migraine-aura stays parked until it's reworked to read better.
+const SHOW_TEXT_HAND = true
+const SHOW_AURA = false
 
 const MODEL = '/assets/models/pillhand.glb'
-const GARDEN = '/assets/garden.webp'
+export const GARDEN = '/assets/garden.webp'
 // the red pill leads into the mind-jungle — the "Creative Cortex" experience,
-// a LOCAL project at C:\Users\hibyr\portf\creative-cortex-refactored
-// (npm run dev there → serve on localhost:5173). Swap for the live URL later.
-const RED_PILL_URL = 'http://localhost:5173/'
+// source at C:\Users\hibyr\portf\creative-cortex-refactored, deployed to
+// webandstyle.com (behind the "coming soon" gate for now). WIRED (2026-07-26):
+// clicking the red pill plays the whole storm → singularity → black sequence and
+// then hard-redirects here (see onSingularityDone / Singularity.jsx). Uses the
+// branded domain (both www.webandstyle.com and the cortex-deploy-silk.vercel.app
+// alias serve the same build).
+const RED_PILL_URL = 'https://www.webandstyle.com/'
 const BLUE_PILL_HASH = '#agency'
-const GARDEN_AR = 1125 / 1998 // image height / width
-const CFG_KEY = 'ws-arrival'
+export const GARDEN_AR = 1125 / 1998 // image height / width
+export const CFG_KEY = 'ws-arrival'
 
 // selectable faces for the 3D title (drei <Text> loads .otf directly)
 const FONTS = [
@@ -53,15 +62,42 @@ const FONTS = [
 // garden: bx/by/bz plane pos, bs scale
 // at/freeze editor-only.
 const DEFAULT_CFG = {
-  hx: 1.65, hy: 0.05, hs: 1.8, hz: -8, rx: 27, ry: -27, rz: 0,
-  stext: 'Choose\nyour Path', sfont: 1, ssize: 0.88,
-  sx: -4.2, sy: -0.4, sz: -0.05, srx: 0, sry: 0, srz: 0, scolor: '#f4f1ff',
+  hx: 2, hy: 0.5, hs: 1.65, hz: -8, rx: 27, ry: -27, rz: 0,
+  stext: 'Choose\nyour \n           Path', sfont: 1, ssize: 2,
+  // sz pulled back from -0.05 into the garden's own depth range (items sit
+  // between z -2 and -9) so the closest foliage (z ≈ -2) now sits IN FRONT of
+  // the text and can visually hang into the letters — the depth-write fix
+  // above is what makes that actually occlude correctly instead of just
+  // being ignored
+  sx: -8, sy: -0.15, sz: -5.25, srx: 0, sry: 0, srz: 0, scolor: '#f4f1ff',
+  sshadow: 0.26,
   bx: 0, by: -0.5, bz: -6.2, bs: 1.24,
   gbr: 1.42, gsa: 1.6, gco: 1.08, // garden brightness / saturation / contrast (revives the dead light)
-  freeze: 0, at: 0.7,
+  // THE STORM (2026-07-23) — replaces the removed white-rabbit sequence.
+  // Clicking the red pill kicks off an "earthquake": the sky tips into a dark
+  // violet storm, dark clouds crack with yellow lightning, the butterflies
+  // flee, the camera shakes, and readable Matrix-green code sharpens across
+  // the LED wall in an expanding wave. All of it lives in GardenSky's shader
+  // + StormShake (the camera) + Butterflies (the flee), driven by stormRef.
+  // Tuning knobs (baked from the ?arrival editor):
+  //   stDur   — onset ramp: seconds for the storm to build to full intensity
+  //   stWave  — seconds for the code-sharpening wavefront to sweep the wall
+  //   stShake — camera earthquake amplitude multiplier
+  //   stLight — lightning frequency/brightness multiplier
+  stDur: 1.4, stWave: 2.6, stShake: 1, stLight: 1,
+  // THE SINGULARITY (2026-07-25) — the payoff AFTER the storm. Once the storm
+  // has built (stDur) and held (stHold), everything resolves into purple code
+  // (sgCode), shatters + is pulled into the spiral vortex (sgBurst), which
+  // collapses to a black hole filling the screen (sgCollapse), holds black
+  // (sgBlack), then hands off with a hard redirect to the mind-jungle. See
+  // Singularity.jsx (singularityState is the shared clock). sgAt/sgPreview are
+  // editor-only (scrub the whole post-storm sequence with one slider).
+  stHold: 1.0, sgCode: 1.6, sgBurst: 1.3, sgCollapse: 1.1, sgBlack: 0.7,
+  sgAt: 0, sgPreview: 0,
+  freeze: 1, at: 1,
 }
 // which keys force a <Text> rebuild (vs. per-frame updates)
-const UI_KEYS = ['stext', 'sfont', 'ssize', 'scolor']
+const UI_KEYS = ['stext', 'sfont', 'ssize', 'scolor', 'sshadow']
 
 const clamp01 = (v) => Math.min(Math.max(v, 0), 1)
 const smooth = (x, a, b) => {
@@ -69,9 +105,9 @@ const smooth = (x, a, b) => {
   return t * t * (3 - 2 * t)
 }
 const deg = (d) => THREE.MathUtils.degToRad(d || 0)
-const pickUi = (c) => ({ stext: c.stext, sfont: c.sfont, ssize: c.ssize, scolor: c.scolor })
+const pickUi = (c) => ({ stext: c.stext, sfont: c.sfont, ssize: c.ssize, scolor: c.scolor, sshadow: c.sshadow })
 
-function loadCfg() {
+export function loadCfg() {
   let c = { ...DEFAULT_CFG }
   try {
     const s = localStorage.getItem(CFG_KEY)
@@ -80,7 +116,7 @@ function loadCfg() {
     // corrupted store — defaults
   }
   const url = new URLSearchParams(window.location.search)
-  const numeric = ['hx', 'hy', 'hs', 'hz', 'rx', 'ry', 'rz', 'sfont', 'ssize', 'sx', 'sy', 'sz', 'srx', 'sry', 'srz', 'bx', 'by', 'bz', 'bs', 'gbr', 'gsa', 'gco', 'at', 'freeze']
+  const numeric = ['hx', 'hy', 'hs', 'hz', 'rx', 'ry', 'rz', 'sfont', 'ssize', 'sx', 'sy', 'sz', 'srx', 'sry', 'srz', 'sshadow', 'bx', 'by', 'bz', 'bs', 'gbr', 'gsa', 'gco', 'stDur', 'stWave', 'stShake', 'stLight', 'stHold', 'sgCode', 'sgBurst', 'sgCollapse', 'sgBlack', 'sgAt', 'sgPreview', 'at', 'freeze']
   for (const k of numeric) {
     const v = url.get('a' + k)
     if (v !== null && Number.isFinite(Number(v))) c[k] = Number(v)
@@ -100,6 +136,7 @@ const GARDEN_FRAG = /* glsl */ `
   precision highp float;
   uniform sampler2D uMap;
   uniform float uBright, uSat, uContrast, uOpacity;
+  ${CODE_DISSOLVE_PARS}
   varying vec2 vUv;
   void main() {
     vec4 t = texture2D(uMap, vUv);
@@ -108,12 +145,16 @@ const GARDEN_FRAG = /* glsl */ `
     c = mix(vec3(l), c, uSat);              // saturation
     c = (c - 0.5) * uContrast + 0.5;        // contrast around mid-grey
     gl_FragColor = vec4(clamp(c, 0.0, 1.0), t.a * uOpacity);
+    // the singularity: the ground/environment resolves into purple code too,
+    // then erodes to the void (same shared uCode/uBurst as every other object)
+    ${CODE_DISSOLVE_FRAG}
   }
 `
 
 // the garden path plane, deep behind the hand + title (always drawn hindmost)
-function GardenBg({ arrivalRef, cfgRef, editor }) {
+function GardenBg({ arrivalRef, cfgRef, editor, stormRef, reduceMotion }) {
   const tex = useTexture(GARDEN)
+  const size = useThree((s) => s.size)
   const meshRef = useRef()
   const matRef = useRef()
   const uniforms = useMemo(
@@ -123,11 +164,15 @@ function GardenBg({ arrivalRef, cfgRef, editor }) {
       uSat: { value: 1.6 },
       uContrast: { value: 1.08 },
       uOpacity: { value: 0 },
+      uCode: { value: 0 },
+      uBurst: { value: 0 },
+      uCodeRes: { value: new THREE.Vector2(1, 1) },
+      uCodeTime: { value: 0 },
     }),
     [tex],
   )
   useMemo(() => { tex.colorSpace = THREE.NoColorSpace }, [tex])
-  useFrame(() => {
+  useFrame((state) => {
     const cfg = cfgRef.current
     const a = editor && cfg.freeze ? cfg.at : arrivalRef.current
     const m = matRef.current
@@ -136,6 +181,19 @@ function GardenBg({ arrivalRef, cfgRef, editor }) {
       m.uniforms.uBright.value = cfg.gbr
       m.uniforms.uSat.value = cfg.gsa
       m.uniforms.uContrast.value = cfg.gco
+      // singularity code-dissolve of the ground/environment
+      const t = state.clock.elapsedTime
+      const storm = stormRef?.current
+      const preview = editor && cfg?.sgPreview === 1
+      let st = null
+      if (preview) st = singularityState(0, cfg, true, cfg?.sgAt ?? 0)
+      else if (storm?.triggered && storm.startedAt != null) {
+        st = singularityState(t - storm.startedAt, cfg, false)
+      }
+      m.uniforms.uCode.value = st ? st.code : 0
+      m.uniforms.uBurst.value = st ? st.burst : 0
+      m.uniforms.uCodeTime.value = reduceMotion ? 0 : t
+      m.uniforms.uCodeRes.value.set(size.width, size.height)
     }
     if (meshRef.current) {
       meshRef.current.position.set(cfg.bx, cfg.by, cfg.bz)
@@ -163,13 +221,32 @@ function GardenBg({ arrivalRef, cfgRef, editor }) {
 }
 
 // the 3D title — sits in the garden, fully tunable (text/font/size/pos/depth/rot)
-function Title3D({ arrivalRef, cfgRef, editor, ui }) {
+function Title3D({ arrivalRef, cfgRef, editor, ui, stormRef }) {
   const groupRef = useRef()
   const matRef = useRef()
-  useFrame(() => {
+  const textRef = useRef()
+  useFrame((state) => {
     const cfg = cfgRef.current
     const a = editor && cfg.freeze ? cfg.at : arrivalRef.current
-    if (matRef.current) matRef.current.opacity = smooth(a, 0.12, 0.42)
+    // the garden (background/plants/sky/butterflies) is present from the
+    // first frame with no fade of its own; the hand arrives first (see
+    // PillHand's op window below), and only once it has essentially finished
+    // materializing does the text fade in — "you've arrived, here's the
+    // choice" reads as a beat AFTER the hand, not alongside it
+    // ...then dissolves out as the singularity turns everything to code (the
+    // solid title shouldn't linger white while the world becomes code)
+    const storm = stormRef?.current
+    const preview = editor && cfg?.sgPreview === 1
+    let codeOut = 0
+    if (preview) codeOut = singularityState(0, cfg, true, cfg?.sgAt ?? 0)?.code ?? 0
+    else if (storm?.triggered && storm.startedAt != null) {
+      codeOut = singularityState(state.clock.elapsedTime - storm.startedAt, cfg, false)?.code ?? 0
+    }
+    const fade = smooth(a, 0.55, 0.85) * (1 - codeOut)
+    if (matRef.current) matRef.current.opacity = fade
+    // the shadow fades in WITH the glyphs (troika's outline is a separate
+    // pass, driven imperatively here so it never pops in ahead of the text)
+    if (textRef.current) textRef.current.outlineOpacity = (ui.sshadow ?? 0) * fade
     if (groupRef.current) {
       groupRef.current.position.set(cfg.sx, cfg.sy, cfg.sz)
       groupRef.current.rotation.set(deg(cfg.srx), deg(cfg.sry), deg(cfg.srz))
@@ -178,6 +255,7 @@ function Title3D({ arrivalRef, cfgRef, editor, ui }) {
   return (
     <group ref={groupRef}>
       <Text
+        ref={textRef}
         key={`${ui.sfont}-${ui.stext}`}
         font={FONTS[ui.sfont]?.url}
         fontSize={ui.ssize}
@@ -186,8 +264,27 @@ function Title3D({ arrivalRef, cfgRef, editor, ui }) {
         textAlign="left"
         lineHeight={1.05}
         letterSpacing={0.01}
+        // drop shadow: an offset, blurred, dark copy of the glyphs behind the
+        // main fill — offset down-right to match the scene's key light
+        // (upper-left sun, see the directionalLight in Stage), so the shadow
+        // reads as "cast" by the same light instead of an arbitrary glow
+        outlineWidth="6%"
+        outlineBlur="20%"
+        outlineOffsetX="4%"
+        outlineOffsetY="-4%"
+        outlineColor="#05070d"
+        outlineOpacity={0}
       >
         {ui.stext}
+        {/* every garden plant material is alphaMode:BLEND (soft foliage edges),
+            which THREE.js puts in the same non-depth-writing transparent queue
+            as this text — two depth-writeless transparent objects only stack
+            correctly if they happen to draw in the right order, which isn't
+            guaranteed and is exactly why pushing the Z slider back didn't let
+            foliage/the statue/butterflies cover the text. Text glyphs are
+            solid-edged (no soft alpha gradient like foliage), so it can safely
+            WRITE depth — that makes it participate in real depth-buffer
+            occlusion against everything else, regardless of draw order. */}
         <meshBasicMaterial
           ref={matRef}
           attach="material"
@@ -195,77 +292,11 @@ function Title3D({ arrivalRef, cfgRef, editor, ui }) {
           transparent
           toneMapped={false}
           opacity={0}
-          depthWrite={false}
+          fog={false}
         />
       </Text>
     </group>
   )
-}
-
-// the frozen matrix curtain on the black void: still, faint vertical code
-// columns that DRAIN over time — every ~9s a random column loses its lowest
-// glyph, so the code slowly empties. A subconscious "time is passing, choose"
-// nudge. It sits BEHIND the 3D scene (the garden/hand/title cover it), only
-// showing through on the upper black area.
-const MATRIX_CHARS = '01アイウエオカキクケサシスセソタチツ0123456789$+*<>=|╱╲✦'
-
-function MatrixCurtain({ arrivalRef, curtainRef, reduceMotion }) {
-  const canvasRef = useRef()
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return undefined
-    const ctx = canvas.getContext('2d')
-    const FONT = 16
-    const STEP = 24
-    let w = 0, h = 0, columns = []
-    const rand = (n) => Math.floor(Math.random() * n)
-
-    function build() {
-      w = canvas.width = window.innerWidth
-      h = canvas.height = window.innerHeight
-      const rows = Math.ceil(h / FONT) + 1
-      const n = Math.ceil(w / STEP)
-      columns = []
-      for (let i = 0; i < n; i += 1) {
-        const chars = []
-        for (let j = 0; j < rows; j += 1) chars.push(MATRIX_CHARS[rand(MATRIX_CHARS.length)])
-        columns.push({ x: i * STEP + 5, chars, len: 3 + rand(Math.floor(rows * 0.6)) })
-      }
-    }
-    function draw() {
-      ctx.clearRect(0, 0, w, h)
-      ctx.font = `${FONT}px "IBM Plex Mono", monospace`
-      ctx.textBaseline = 'top'
-      for (const col of columns) {
-        for (let j = 0; j < col.len; j += 1) {
-          const fromBottom = col.len - j
-          // brightest glyph sits at the draining tip; the rest is VERY faint
-          // (per the user: a barely-there subconscious layer, not a backdrop)
-          const a = fromBottom === 1 ? 0.28 : fromBottom <= 3 ? 0.12 : 0.06
-          ctx.fillStyle = `rgba(96, 224, 138, ${a})`
-          ctx.fillText(col.chars[j], col.x, j * FONT)
-        }
-      }
-    }
-    build()
-    draw()
-    const onResize = () => { build(); draw() }
-    window.addEventListener('resize', onResize)
-    // drain: a random living column drops its lowest glyph on an interval
-    const drain = reduceMotion ? null : setInterval(() => {
-      const alive = columns.filter((c) => c.len > 1)
-      if (alive.length) alive[rand(alive.length)].len -= 1
-      // gentle life: reshuffle a couple of glyphs so it isn't dead-static
-      for (let k = 0; k < 3; k += 1) {
-        const c = columns[rand(columns.length)]
-        c.chars[rand(c.chars.length)] = MATRIX_CHARS[rand(MATRIX_CHARS.length)]
-      }
-      draw()
-    }, 9000)
-    return () => { window.removeEventListener('resize', onResize); if (drain) clearInterval(drain) }
-  }, [reduceMotion])
-
-  return <canvas ref={(el) => { canvasRef.current = el; if (curtainRef) curtainRef.current = el }} className="arrival__matrix" />
 }
 
 // migraine-aura vision: patchy scintillating fortification arcs — zigzag
@@ -370,23 +401,31 @@ function AuraVision({ arrivalRef, cfgRef, editor, reduceMotion }) {
   )
 }
 
-function PillHand({ arrivalRef, cfgRef, editor }) {
+function PillHand({ arrivalRef, cfgRef, editor, stormRef, reduceMotion }) {
   const { scene } = useGLTF(MODEL)
   const outerRef = useRef()
   const matsRef = useRef([])
+  // one code-dissolve uniforms holder per material — the hands resolve into
+  // purple code and shatter with the rest of the garden at the singularity
+  const codeRef = useRef([])
   const model = useMemo(() => scene.clone(true), [scene])
   useEffect(() => {
     const mats = []
+    const code = []
     model.traverse((o) => {
       if (o.isMesh && o.material) {
         o.material = o.material.clone()
         o.material.transparent = true
         o.material.depthWrite = true
+        code.push(patchCodeDissolve(o.material))
         mats.push(o.material)
       }
     })
     matsRef.current = mats
+    codeRef.current = code
   }, [model])
+
+  const screen = useThree((s) => s.size)
 
   const norm = useMemo(() => {
     const box = new THREE.Box3().setFromObject(model)
@@ -397,17 +436,40 @@ function PillHand({ arrivalRef, cfgRef, editor }) {
     return { s, p: [-c.x * s, -c.y * s, -c.z * s] }
   }, [model])
 
-  useFrame(() => {
+  useFrame((state) => {
     const cfg = cfgRef.current
     const a = editor && cfg.freeze ? cfg.at : arrivalRef.current
-    const e = smooth(a, 0.3, 0.86)
-    const op = smooth(a, 0.34, 0.72)
+    // the hand arrives FIRST — right after the garden itself has settled —
+    // and finishes materializing well before the text starts fading in
+    // (see Title3D's fade at 0.55-0.85)
+    const e = smooth(a, 0.16, 0.6)
+    const op = smooth(a, 0.18, 0.5)
     if (outerRef.current) {
       outerRef.current.position.set(cfg.hx, cfg.hy, cfg.hz + (0 - cfg.hz) * e)
       outerRef.current.scale.setScalar(cfg.hs * (0.82 + 0.18 * e))
       outerRef.current.rotation.set(deg(cfg.rx), deg(cfg.ry), deg(cfg.rz))
     }
     for (const m of matsRef.current) m.opacity = op
+    // the singularity code-dissolve: the hands resolve into purple code, then
+    // shatter (shared clock — same state GardenItems + the vortex read)
+    if (codeRef.current.length > 0) {
+      const t = state.clock.elapsedTime
+      const storm = stormRef?.current
+      const preview = editor && cfg?.sgPreview === 1
+      let st = null
+      if (preview) st = singularityState(0, cfg, true, cfg?.sgAt ?? 0)
+      else if (storm?.triggered && storm.startedAt != null) {
+        st = singularityState(t - storm.startedAt, cfg, false)
+      }
+      const code = st ? st.code : 0
+      const burst = st ? st.burst : 0
+      for (const u of codeRef.current) {
+        u.uCode.value = code
+        u.uBurst.value = burst
+        u.uCodeTime.value = reduceMotion ? 0 : t
+        u.uCodeRes.value.set(screen.width, screen.height)
+      }
+    }
   })
 
   // the choice: our own raycast on the canvas's pointer events (the r3f
@@ -420,7 +482,9 @@ function PillHand({ arrivalRef, cfgRef, editor }) {
     const el = gl.domElement
     const raycaster = new THREE.Raycaster()
     const ndc = new THREE.Vector2()
-    const canChoose = () => !editor && arrivalRef.current > 0.55
+    // once the storm is triggered, both pills stop responding — the red-pill
+    // click already committed to the earthquake beat
+    const canChoose = () => !editor && arrivalRef.current > 0.55 && !stormRef?.current?.triggered
     const pick = (e) => {
       if (!outerRef.current) return null
       const rect = el.getBoundingClientRect()
@@ -441,8 +505,17 @@ function PillHand({ arrivalRef, cfgRef, editor }) {
       const hit = pick(e)
       if (!hit) return
       const local = outerRef.current.worldToLocal(hit.point.clone())
-      if (local.x < 0) window.location.href = RED_PILL_URL
-      else window.location.hash = BLUE_PILL_HASH
+      if (local.x < 0) {
+        // the red pill no longer navigates straight away — it triggers the
+        // storm (the earthquake + the wall breaking open into code). The
+        // navigation to the mind-jungle is deferred to a later handoff step
+        // (see status.md — still to be wired once the storm reads right).
+        if (stormRef && !stormRef.current.triggered) {
+          stormRef.current = { triggered: true, startedAt: null }
+        }
+      } else {
+        window.location.hash = BLUE_PILL_HASH
+      }
     }
     el.addEventListener('pointermove', onMove)
     el.addEventListener('pointerdown', onDown)
@@ -451,7 +524,7 @@ function PillHand({ arrivalRef, cfgRef, editor }) {
       el.removeEventListener('pointerdown', onDown)
       document.body.style.cursor = ''
     }
-  }, [gl, camera, editor, arrivalRef])
+  }, [gl, camera, editor, arrivalRef, stormRef])
 
   return (
     <group ref={outerRef}>
@@ -485,14 +558,24 @@ function Stage({
   onSelect,
   onMove,
   light,
+  stormRef,
+  onSingularityDone,
 }) {
   // the butterflies write their sky-tap point here; GardenSky reads it to fault
-  // the sky at the impact ("the system wobbles where they hit the LED wall")
+  // the sky at the impact ("the system wobbles where they hit the LED wall").
+  // The red pill instead writes stormRef, which drives the full storm across
+  // the whole wall (see GardenSky/StormShake/Butterflies).
   const hitRef = useRef(null)
   return (
     <>
       {/* the glitching sky sits hindmost, behind the ground plate */}
-      <GardenSky reduceMotion={reduceMotion} hitRef={hitRef} />
+      <GardenSky reduceMotion={reduceMotion} hitRef={hitRef} stormRef={stormRef} cfgRef={cfgRef} />
+      {/* the earthquake: shakes the fixed arrival camera in place (never a
+          dolly — a travel would reveal the flat garden plane edge-on) */}
+      <StormShake stormRef={stormRef} cfgRef={cfgRef} reduceMotion={reduceMotion} />
+      {/* THE SINGULARITY: after the storm, the spiral vortex + black hole that
+          swallows the frame (drawn on top of everything, renderOrder 100) */}
+      <SingularityVortex stormRef={stormRef} cfgRef={cfgRef} editor={editor} reduceMotion={reduceMotion} onDone={onSingularityDone} />
       {/* black smoke: fog sinks the hand into black on the black DOM layer and
           releases it as it pushes forward = "surfacing from smoke" (garden item
           materials opt out of it — it washed their colors toward black) */}
@@ -508,7 +591,7 @@ function Stage({
           the Suspense stuck pending (rare, ~1 in 3 cold sessions) — on retry
           the loader caches are warm so it commits instantly */}
       <Suspense key={sceneKey} fallback={null}>
-        <GardenBg arrivalRef={arrivalRef} cfgRef={cfgRef} editor={editor} />
+        <GardenBg arrivalRef={arrivalRef} cfgRef={cfgRef} editor={editor} stormRef={stormRef} reduceMotion={reduceMotion} />
         <GardenItems
           items={items}
           selectedId={selectedId}
@@ -516,13 +599,18 @@ function Stage({
           onSelect={onSelect}
           onMove={onMove}
           reduceMotion={reduceMotion}
+          stormRef={stormRef}
+          cfgRef={cfgRef}
+          editor={editor}
         />
-        <Butterflies hitRef={hitRef} reduceMotion={reduceMotion} />
-        {SHOW_CHOICE && <Title3D arrivalRef={arrivalRef} cfgRef={cfgRef} editor={editor} ui={ui} />}
-        {SHOW_CHOICE && <PillHand arrivalRef={arrivalRef} cfgRef={cfgRef} editor={editor} />}
+        <Butterflies hitRef={hitRef} reduceMotion={reduceMotion} stormRef={stormRef} cfgRef={cfgRef} editor={editor} />
+        {SHOW_TEXT_HAND && <Title3D arrivalRef={arrivalRef} cfgRef={cfgRef} editor={editor} ui={ui} stormRef={stormRef} />}
+        {SHOW_TEXT_HAND && (
+          <PillHand arrivalRef={arrivalRef} cfgRef={cfgRef} editor={editor} stormRef={stormRef} reduceMotion={reduceMotion} />
+        )}
         <SceneReady flag={readyFlag} />
       </Suspense>
-      {SHOW_CHOICE && (
+      {SHOW_AURA && (
         <AuraVision arrivalRef={arrivalRef} cfgRef={cfgRef} editor={editor} reduceMotion={reduceMotion} />
       )}
     </>
@@ -539,7 +627,7 @@ function Field({ label, value, min, max, step, onChange }) {
   )
 }
 
-function ArrivalEditor({ cfgRef, registerSync, onUi }) {
+function ArrivalEditor({ cfgRef, registerSync, onUi, stormRef }) {
   const [cfg, setCfg] = useState({ ...cfgRef.current })
   const [note, setNote] = useState('')
   useEffect(() => { registerSync?.(() => setCfg({ ...cfgRef.current })) }, [registerSync, cfgRef])
@@ -573,6 +661,7 @@ function ArrivalEditor({ cfgRef, registerSync, onUi }) {
         <input type="color" value={cfg.scolor} onChange={(e) => set('scolor', e.target.value)} />
       </label>
       <Field label="méret" value={cfg.ssize} min={0.1} max={2.5} step={0.01} onChange={(v) => set('ssize', v)} />
+      <Field label="árnyék" value={cfg.sshadow ?? 0.55} min={0} max={1} step={0.02} onChange={(v) => set('sshadow', v)} />
       <p className="arrival-editor__group">Felirat — hely / 3D</p>
       <Field label="X (bal/jobb)" value={cfg.sx} min={-8} max={8} step={0.05} onChange={(v) => set('sx', v)} />
       <Field label="Y (le/fel)" value={cfg.sy} min={-5} max={5} step={0.05} onChange={(v) => set('sy', v)} />
@@ -598,6 +687,57 @@ function ArrivalEditor({ cfgRef, registerSync, onUi }) {
       <Field label="forgatás X" value={cfg.rx ?? 0} min={-180} max={180} step={1} onChange={(v) => set('rx', v)} />
       <Field label="forgatás Y" value={cfg.ry ?? 0} min={-180} max={180} step={1} onChange={(v) => set('ry', v)} />
       <Field label="forgatás Z" value={cfg.rz ?? 0} min={-180} max={180} step={1} onChange={(v) => set('rz', v)} />
+
+      <p className="arrival-editor__group">Vihar (piros pirula → földrengés)</p>
+      <p className="arrival-editor__hint">
+        A piros pirula elindítja a vihart: az ég sötét lilába borul, a felhők
+        elsötétednek és sárgán villámlanak, a pillangók elmenekülnek, a kamera
+        megremeg, és a LED-falon hullámszerűen élesedik ki a zöld kód. Minden a
+        GardenSky shaderében + a StormShake kamerában + a pillangók menekülésében
+        él. Indítsd/állítsd vissza innen (a szerkesztőben a pirula-kattintás
+        szándékosan tiltva van).
+      </p>
+      <Field label="felépülés ideje (mp)" value={cfg.stDur} min={0.3} max={4} step={0.1} onChange={(v) => set('stDur', v)} />
+      <Field label="kód-hullám ideje (mp)" value={cfg.stWave} min={0.5} max={6} step={0.1} onChange={(v) => set('stWave', v)} />
+      <Field label="földrengés erőssége" value={cfg.stShake} min={0} max={2.5} step={0.05} onChange={(v) => set('stShake', v)} />
+      <Field label="villámlás erőssége" value={cfg.stLight} min={0} max={2.5} step={0.05} onChange={(v) => set('stLight', v)} />
+
+      <p className="arrival-editor__group">Szingularitás (a vihar után)</p>
+      <p className="arrival-editor__hint">
+        A vihar felépülése + kitartása után minden a helyén lilás kóddá válik,
+        szétrobban, és a spirál-örvény beszippantja a képet egy feketelyukba,
+        ami kitölti a képernyőt — majd (élesben) átirányít a webandstyle.com-ra.
+        A „Teszt indítás" a teljes láncot lejátssza (az editorban navigáció nélkül).
+        A „szekvencia előnézet" pipával a lenti csúszka végigscrubozza a szakaszt.
+      </p>
+      <Field label="vihar kitartása (mp)" value={cfg.stHold ?? 1} min={0} max={4} step={0.1} onChange={(v) => set('stHold', v)} />
+      <Field label="kóddá válás (mp)" value={cfg.sgCode ?? 1.6} min={0.3} max={4} step={0.1} onChange={(v) => set('sgCode', v)} />
+      <Field label="szétrobbanás + örvény (mp)" value={cfg.sgBurst ?? 1.3} min={0.3} max={4} step={0.1} onChange={(v) => set('sgBurst', v)} />
+      <Field label="feketelyuk-összeomlás (mp)" value={cfg.sgCollapse ?? 1.1} min={0.3} max={4} step={0.1} onChange={(v) => set('sgCollapse', v)} />
+      <Field label="feketeség kitartása (mp)" value={cfg.sgBlack ?? 0.7} min={0} max={3} step={0.1} onChange={(v) => set('sgBlack', v)} />
+      <label className="arrival-editor__row arrival-editor__row--check">
+        <input type="checkbox" checked={cfg.sgPreview === 1} onChange={(e) => set('sgPreview', e.target.checked ? 1 : 0)} />
+        <span>szekvencia előnézet (scrub)</span>
+      </label>
+      <Field label="szekvencia fázis" value={cfg.sgAt ?? 0} min={0} max={1} step={0.01} onChange={(v) => set('sgAt', v)} />
+
+      <div className="arrival-editor__actions">
+        <button
+          type="button"
+          onClick={() => {
+            // ALWAYS restart from scratch — clear then re-trigger next frame so
+            // GardenSky/StormShake re-stamp startedAt and the storm replays even
+            // if it was already running (e.g. after tweaking a slider)
+            stormRef.current = { triggered: false, startedAt: null }
+            requestAnimationFrame(() => { stormRef.current = { triggered: true, startedAt: null } })
+          }}
+        >
+          Teszt indítás
+        </button>
+        <button type="button" onClick={() => { stormRef.current = { triggered: false, startedAt: null } }}>
+          Visszaállítás
+        </button>
+      </div>
 
       <label className="arrival-editor__row arrival-editor__row--check">
         <input type="checkbox" checked={cfg.freeze === 1} onChange={(e) => set('freeze', e.target.checked ? 1 : 0)} />
@@ -646,7 +786,23 @@ export default function ArrivalScene({ arrivalRef }) {
     [],
   )
   const layerRef = useRef(null)
-  const curtainRef = useRef(null)
+  // set by PillHand on a red-pill click; read by GardenSky/StormShake/Butterflies
+  // to drive the storm. Lifted up here (rather than inside Stage) so the
+  // ?arrival editor can ALSO fire it directly (a "teszt indítás" button), since
+  // the editor intentionally disables real pill clicks (canChoose() requires
+  // !editor) to avoid accidental navigation while positioning things.
+  // startedAt is stamped by GardenSky's useFrame on the first frame it sees
+  // triggered:true, then everyone reads elapsedTime - startedAt for progress.
+  const stormRef = useRef({ triggered: false, startedAt: null })
+  // the navigation handoff: fired once when the singularity sequence finishes
+  // (screen fully black) → hard-redirect into the mind-jungle. Never navigates
+  // in the editor/lab (frozen) so tuning the storm can't kick you out.
+  const redirectedRef = useRef(false)
+  const onSingularityDone = useCallback(() => {
+    if (frozen || redirectedRef.current) return
+    redirectedRef.current = true
+    window.location.href = RED_PILL_URL
+  }, [frozen])
   const syncFnRef = useRef(null)
   const registerSync = useCallback((fn) => { syncFnRef.current = fn }, [])
   const onUi = useCallback(() => setUi(pickUi(cfgRef.current)), [])
@@ -675,18 +831,14 @@ export default function ArrivalScene({ arrivalRef }) {
           setSceneKey((k) => k + 1)
         }
       }
-      // the matrix curtain surfaces in the second half of the arrival (once the
-      // void + garden have settled) — the "you are here, now choose" beat
-      if (curtainRef.current) {
-        curtainRef.current.style.opacity = frozen ? '1' : String(smooth(a, 0.45, 0.85))
-      }
       if (frozen) return
       // the black void fades up over the tube's (already dark) exit
       if (layerRef.current) {
         layerRef.current.style.opacity = String(smooth(a, 0.02, 0.14))
-        // once the hands have surfaced, the layer takes the pointer so the
-        // pills become clickable (before that it stays transparent to input)
-        layerRef.current.style.pointerEvents = SHOW_CHOICE && a > 0.55 ? 'auto' : 'none'
+        // once the hands have surfaced (op window ends at 0.5, see PillHand),
+        // the layer takes the pointer so the pills become clickable (before
+        // that it stays transparent to input)
+        layerRef.current.style.pointerEvents = SHOW_TEXT_HAND && a > 0.5 ? 'auto' : 'none'
       }
     }
     raf = requestAnimationFrame(tick)
@@ -695,9 +847,6 @@ export default function ArrivalScene({ arrivalRef }) {
 
   return (
     <div className={`arrival${frozen ? ' arrival--editor' : ''}`} aria-hidden="true" ref={layerRef}>
-      {active && SHOW_CHOICE && (
-        <MatrixCurtain arrivalRef={arrivalRef} curtainRef={curtainRef} reduceMotion={reduceMotion} />
-      )}
       {active && (
         <div className="arrival__canvas-wrap">
           <Canvas
@@ -720,11 +869,20 @@ export default function ArrivalScene({ arrivalRef }) {
               onSelect={setSelectedId}
               onMove={onItemMove}
               light={light}
+              stormRef={stormRef}
+              onSingularityDone={onSingularityDone}
             />
           </Canvas>
         </div>
       )}
-      {editor && !lab && <ArrivalEditor cfgRef={cfgRef} registerSync={registerSync} onUi={onUi} />}
+      {editor && !lab && (
+        <ArrivalEditor
+          cfgRef={cfgRef}
+          registerSync={registerSync}
+          onUi={onUi}
+          stormRef={stormRef}
+        />
+      )}
       {lab && (
         <GardenLabPanel
           items={items}

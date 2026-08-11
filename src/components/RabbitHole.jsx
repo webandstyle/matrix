@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { ScreenQuad } from '@react-three/drei'
 import * as THREE from 'three'
-import TubeRide from './TubeRide'
+import ChromaJourney from './ChromaJourney'
 import './RabbitHole.css'
 
 // smoothstep for the JS-side crossfade between the portal dive and the tube ride
@@ -204,7 +204,7 @@ export default function RabbitHole({ rabbitRef }) {
     if (editor) cfgRef.current.freeze = 1 // show the portal for placement
   }
   const [active, setActive] = useState(editor)
-  const [tubeActive, setTubeActive] = useState(false)
+  const [chromaActive, setChromaActive] = useState(false)
   const reduceMotion = useMemo(
     () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     [],
@@ -213,11 +213,11 @@ export default function RabbitHole({ rabbitRef }) {
   const syncFnRef = useRef(null)
   const registerSync = useCallback((fn) => { syncFnRef.current = fn }, [])
   const portalWrapRef = useRef(null)
-  const tubeWrapRef = useRef(null)
+  const chromaWrapRef = useRef(null)
 
-  // mount the portal + tube canvases as the dive progresses, and crossfade the
-  // portal dive (Part 1) into the rollercoaster tube ride (Part 3) around the
-  // point where the iris has fully engulfed the view.
+  // mount the portal + chromatic-journey canvases as the dive progresses, and
+  // crossfade the portal dive (Part 1) into the chromatic journey (Part 3)
+  // around the point where the iris has fully engulfed the view.
   useEffect(() => {
     if (editor) return undefined
     let raf = 0
@@ -225,16 +225,16 @@ export default function RabbitHole({ rabbitRef }) {
       raf = requestAnimationFrame(tick)
       const rr = rabbitRef.current
       if (!active && rr > 0.001) setActive(true)
-      if (!tubeActive && rr > 0.11) setTubeActive(true)
-      // tighter crossfade so the tube's opaque backdrop covers the stage quickly
-      // (a slow fade let the hand/logo bleed through mid-transition)
-      const fade = smooth(rr, 0.15, 0.22) // 0 = portal, 1 = tube
+      if (!chromaActive && rr > 0.11) setChromaActive(true)
+      // tighter crossfade so the journey's opaque backdrop covers the stage
+      // quickly (a slow fade let the hand/logo bleed through mid-transition)
+      const fade = smooth(rr, 0.15, 0.22) // 0 = portal, 1 = journey
       if (portalWrapRef.current) portalWrapRef.current.style.opacity = String(1 - fade)
-      if (tubeWrapRef.current) tubeWrapRef.current.style.opacity = String(fade)
+      if (chromaWrapRef.current) chromaWrapRef.current.style.opacity = String(fade)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [active, tubeActive, editor, rabbitRef])
+  }, [active, chromaActive, editor, rabbitRef])
 
   // editor: drag the portal centre around the screen
   useEffect(() => {
@@ -280,9 +280,9 @@ export default function RabbitHole({ rabbitRef }) {
           </Canvas>
         </div>
       )}
-      {tubeActive && (
-        <div className="rabbit__layer" ref={tubeWrapRef} style={{ opacity: 0 }}>
-          <TubeRide rabbitRef={rabbitRef} reduceMotion={reduceMotion} />
+      {chromaActive && (
+        <div className="rabbit__layer" ref={chromaWrapRef} style={{ opacity: 0 }}>
+          <ChromaJourney rabbitRef={rabbitRef} />
         </div>
       )}
       {editor && <RabbitEditor cfgRef={cfgRef} registerSync={registerSync} />}

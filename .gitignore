@@ -15,6 +15,16 @@ dist-ssr
 # generation leftovers / originals not meant for the repo
 raw-assets/
 
+# asset sources that live at the repo root: downloaded font/model packs, raw
+# glb exports, reference screenshots. everything shipped is converted into
+# public/assets/ — these originals stay off the repo (257 MB of them).
+/*.zip
+/*.glb
+/*.mp4
+/*.jpg
+/*.jpeg
+/Screenshot*.png
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -25,3 +35,6 @@ raw-assets/
 *.njsproj
 *.sln
 *.sw?
+
+.vercel
+.env*

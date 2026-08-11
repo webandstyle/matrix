@@ -22,7 +22,7 @@ const PATHS = [
   { cx: 2.1, cy: 1.8, cz: -3.3, tx: 2.25, ty: 1.65, ax: 2.9, ay: 0.8, az: 1.9, fx: 0.14, fy: 0.27, fz: 0.45, ph: 4.03, flap: 15, roll: -0.4 },
 ]
 
-function Butterfly({ url, path, index, hitRef, reduceMotion }) {
+function Butterfly({ url, path, index, hitRef, reduceMotion, stormRef, cfgRef, editor }) {
   const { scene } = useGLTF(url)
   const { camera } = useThree()
   const { model, materials } = useMemo(() => {
@@ -63,6 +63,20 @@ function Butterfly({ url, path, index, hitRef, reduceMotion }) {
     if (!outer.current) return
     const t = reduceMotion ? index * 3 : state.clock.elapsedTime
     const p = path
+
+    // STORM: once the red pill fires, the butterflies bolt. flee ramps 0→1
+    // fast (well before the storm peaks) — they should already be gone by the
+    // time the wall is fully code. startedAt is stamped by GardenSky.
+    const storm = stormRef?.current
+    let flee = 0
+    // editor "szekvencia előnézet" scrub is entirely POST-storm (the singularity
+    // sequence), so the butterflies have long since fled — show them gone, or the
+    // preview looks like they ignored the storm
+    if (editor && cfgRef?.current?.sgPreview === 1) {
+      flee = 1
+    } else if (!reduceMotion && storm?.triggered && storm.startedAt != null) {
+      flee = Math.min(1, (state.clock.elapsedTime - storm.startedAt) / 1.0)
+    }
     const phase = t * p.fz + p.ph
     const peakIndex = Math.round((phase - Math.PI * 0.5) / (Math.PI * 2))
     const peakPhase = Math.PI * 0.5 + peakIndex * Math.PI * 2
@@ -90,6 +104,17 @@ function Butterfly({ url, path, index, hitRef, reduceMotion }) {
       outer.current.position.x += Math.sin(t * 91 + index) * 0.045 * digitalFlicker
       outer.current.position.y += Math.sin(t * 73 + index * 2) * 0.03 * digitalFlicker
     }
+    // flee override: lerp up and off the nearest horizontal edge, plus panic
+    // jitter. Applied before the velocity calc below so banking follows escape.
+    if (flee > 0) {
+      const dir = p.cx >= 0 ? 1 : -1
+      const ease = flee * flee
+      const pos = outer.current.position
+      pos.x = THREE.MathUtils.lerp(pos.x, p.cx + dir * 7, ease)
+      pos.y = THREE.MathUtils.lerp(pos.y, p.cy + 5, ease)
+      pos.x += Math.sin(t * 40 + index) * 0.15 * flee
+      pos.y += Math.sin(t * 33 + index * 2) * 0.12 * flee
+    }
 
     // Face the direction of travel. Near contact the banking collapses and the
     // butterfly squares up to the flat wall before the impact jolt twists it.
@@ -115,14 +140,14 @@ function Butterfly({ url, path, index, hitRef, reduceMotion }) {
     // wing flap: squash the wingspan quickly (looks like flapping from this
     // tilt). The wings spread before contact, then corrupt for a few frames.
     if (flap.current) {
-      const natural = reduceMotion ? 0.82 : 0.55 + 0.45 * Math.abs(Math.sin(t * p.flap))
+      const natural = reduceMotion ? 0.82 : 0.55 + 0.45 * Math.abs(Math.sin(t * p.flap * (1 + flee * 1.6)))
       const spread = THREE.MathUtils.lerp(natural, 1, approach * 0.88)
       flap.current.scale.set(spread * (1 + digitalFlicker * 0.16), 1, 1)
     }
 
     // One collision event at the exact turning point. GardenSky receives the
     // same projected contact point that the butterfly visibly rebounds from.
-    if (!reduceMotion && Math.abs(fromImpact) < 0.1 && lastPeak.current !== peakIndex && hitRef) {
+    if (!reduceMotion && flee < 0.05 && Math.abs(fromImpact) < 0.1 && lastPeak.current !== peakIndex && hitRef) {
       lastPeak.current = peakIndex
       lastImpact.current = state.clock.elapsedTime
       proj.current.copy(cur).project(camera)
@@ -155,11 +180,11 @@ function Butterfly({ url, path, index, hitRef, reduceMotion }) {
   )
 }
 
-export default function Butterflies({ hitRef, reduceMotion }) {
+export default function Butterflies({ hitRef, reduceMotion, stormRef, cfgRef, editor }) {
   return (
     <>
-      <Butterfly url={A_URL} path={PATHS[0]} index={0} hitRef={hitRef} reduceMotion={reduceMotion} />
-      <Butterfly url={B_URL} path={PATHS[1]} index={1} hitRef={hitRef} reduceMotion={reduceMotion} />
+      <Butterfly url={A_URL} path={PATHS[0]} index={0} hitRef={hitRef} reduceMotion={reduceMotion} stormRef={stormRef} cfgRef={cfgRef} editor={editor} />
+      <Butterfly url={B_URL} path={PATHS[1]} index={1} hitRef={hitRef} reduceMotion={reduceMotion} stormRef={stormRef} cfgRef={cfgRef} editor={editor} />
     </>
   )
 }

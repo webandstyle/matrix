@@ -17,18 +17,6 @@
 
 /* the title is now a 3D <Text> inside the canvas (editable text/font/size/depth) */
 
-/* the frozen matrix curtain: sits BEHIND the 3D scene (z 0), so the garden /
-   hand / title cover it and it only shows on the upper black void */
-.arrival__matrix {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0; /* driven from arrivalRef */
-  pointer-events: none;
-}
-
 .arrival__canvas-wrap {
   position: absolute;
   inset: 0;
