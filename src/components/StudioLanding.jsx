@@ -119,7 +119,7 @@ export default function StudioLanding() {
   useEffect(() => {
     document.documentElement.lang = lang
     const onMove = (event) => {
-      if (cursor.current) cursor.current.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0)`
+      if (cursor.current) {\n        cursor.current.style.opacity = '1'\n        cursor.current.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0)`\n      }
     }
     window.addEventListener('pointermove', onMove, { passive: true })
     return () => window.removeEventListener('pointermove', onMove)
@@ -166,7 +166,7 @@ export default function StudioLanding() {
         </div>
         <article className="work-item work-item--vanity">
           <a className="work-visual" href="https://pallacintiamakeup.hu" target="_blank" rel="noreferrer">
-            <img src="/assets/work/vanity-desktop.jpg" alt="Vanity Mirror website for Palla Cintia Makeup" />
+            <img src="/assets/work/vanity-desktop.jpg" alt="Vanity Mirror website for Palla Cintia Makeup" loading="lazy" />
             <span className="work-index">01</span>
           </a>
           <div className="work-copy">
@@ -185,7 +185,7 @@ export default function StudioLanding() {
         </article>
         <article className="work-item work-item--matrix">
           <a className="work-visual" href="/?experience=1">
-            <img src="/assets/hero-sprite/hero-poster.jpg" alt="Web and Style immersive 3D experiment" />
+            <img src="/assets/hero-sprite/hero-poster.jpg" alt="Web and Style immersive 3D experiment" loading="lazy" />
             <div className="matrix-stamp">W&S<br /><small>experiment 03</small></div><span className="work-index">03</span>
           </a>
           <div className="work-copy">
