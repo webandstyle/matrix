@@ -43,6 +43,8 @@ const copy = {
     contactText: 'Send the rough version. A few honest lines about the business, the audience and what is not working yet are enough.',
     email: 'alex@webandstyle.com',
     footer: 'Independent creative development studio · Greece / Worldwide',
+    top: 'Back to top ↑',
+    menu: 'Menu',
   },
   hu: {
     nav: ['Munkák', 'Szolgáltatások', 'Stúdió'],
@@ -85,6 +87,52 @@ const copy = {
     contactText: 'Küldd el a nyers verziót. Pár őszinte mondat a vállalkozásról, a közönségről és arról, ami most nem működik, elég a kezdéshez.',
     email: 'alex@webandstyle.com',
     footer: 'Független creative development stúdió · Görögország / Világszerte',
+    top: 'Vissza az elejére ↑',
+    menu: 'Menü',
+  },
+  el: {
+    nav: ['Έργα', 'Υπηρεσίες', 'Στούντιο'],
+    location: 'Βάση στην Ελλάδα · Συνεργασίες παγκοσμίως',
+    eyebrow: 'Ανεξάρτητο studio δημιουργικού σχεδιασμού και ανάπτυξης',
+    heroA: 'Δημιουργούμε ιστοσελίδες',
+    heroB: 'που μένουν αξέχαστες.',
+    intro: 'Στρατηγική, σχεδιασμός και ανάπτυξη μέσα από μία άμεση συνεργασία. Για brands που θέλουν ψηφιακή παρουσία με ξεκάθαρη άποψη — και την τεχνολογία που τη στηρίζει.',
+    cta: 'Ας ξεκινήσουμε',
+    scroll: 'Επιλεγμένα έργα ↓',
+    workTitle: 'Όχι ιδέες που μένουν στο συρτάρι. Εμπειρίες στις οποίες μπαίνεις.',
+    workLead: 'Μια μικρή επιλογή από τον χώρο της ομορφιάς, της τέχνης, της φιλοξενίας και των έξυπνων υπηρεσιών.',
+    vanityType: 'Ομορφιά · Διαδραστική ιστοσελίδα υπηρεσιών',
+    vanityTitle: 'Vanity Mirror',
+    vanityText: 'Η ιστοσελίδα μιας makeup artist μεταμορφώθηκε σε έναν ατμοσφαιρικό, διαδραστικό καθρέφτη — ταυτόχρονα portfolio και διαδρομή προς την κράτηση.',
+    neraType: 'Υγεία · Σχεδιασμός υπηρεσίας με AI',
+    neraTitle: 'Néra',
+    neraText: 'Ένα demo φανταστικής οδοντιατρικής κλινικής με πολύγλωσση AI receptionist για ερωτήσεις θεραπειών, ενδεικτικές τιμές και αιτήματα ραντεβού.',
+    matrixType: 'Πείραμα του studio · WebGL',
+    matrixTitle: 'Η φωλιά του κουνελιού',
+    matrixText: 'Ένας ενιαίος, scroll-driven κόσμος στον browser, φτιαγμένος με real-time 3D, κινηματογραφικές μεταβάσεις και λίγο περισσότερη φροντίδα απ’ όση θεωρείται λογική.',
+    open: 'Άνοιγμα έργου ↗',
+    enter: 'Είσοδος στην εμπειρία ↗',
+    servicesTitle: 'Όσα μπορούμε να αναλάβουμε για σένα.',
+    servicesIntro: 'Έλα με ένα συγκεκριμένο ζητούμενο ή με ολόκληρο το πρόβλημα. Η δουλειά παραμένει άμεση, μελετημένη και φτάνει πάντα μέχρι το launch.',
+    services: [
+      ['01', 'Web design & δημιουργική κατεύθυνση', 'Τοποθέτηση, οπτική ιδέα, αρχιτεκτονική πληροφορίας και responsive σχεδιασμός διεπαφής.'],
+      ['02', 'Ιστοσελίδες & landing pages', 'Γρήγορες, conversion-aware ιστοσελίδες για υπηρεσίες, launches και brands που αναπτύσσονται.'],
+      ['03', 'Διαδραστικό & 3D web', 'Scroll stories, κόσμοι WebGL, product moments και κίνηση που υπάρχει για κάποιον λόγο.'],
+      ['04', 'E-commerce', 'Χαρακτηριστικά storefronts και product journeys, όπου η αγορά παραμένει ξεκάθαρη χωρίς να χάνεται η ταυτότητα του brand.'],
+      ['05', 'AI & έξυπνες ροές', 'Χρήσιμοι assistants, lead qualification, πολύγλωσση υποστήριξη και αυτοματισμοί που ενσωματώνονται διακριτικά.'],
+      ['06', 'Ανάπτυξη, launch & υποστήριξη', 'Frontend ή full-stack ανάπτυξη, deployment, απόδοση, analytics και συνεχής βελτίωση.'],
+    ],
+    approachTitle: 'Μικρό studio, από επιλογή.',
+    approachText: 'Συνεργάζεσαι απευθείας με τον Alex — creative technologist, designer και developer. Λιγότερες παραδόσεις από χέρι σε χέρι σημαίνουν ότι η ιδέα παραμένει αναλλοίωτη από το πρώτο σκίτσο μέχρι το live site.',
+    globalTitle: 'Σχεδιασμένο στην Ελλάδα. Για πελάτες όπου κι αν βρίσκονται.',
+    globalText: 'Η απομακρυσμένη συνεργασία είναι ο κανόνας. Αναλαμβάνουμε projects στα αγγλικά, ελληνικά ή ουγγρικά, πέρα από ζώνες ώρας και σύνορα.',
+    close: 'Χωρίς φουσκωμένες ομάδες. Χωρίς ασαφείς διαδικασίες. Χωρίς templates μεταμφιεσμένα σε στρατηγική.',
+    contactTitle: 'Έχεις κάτι που αξίζει να δημιουργηθεί;',
+    contactText: 'Στείλε την ακατέργαστη εκδοχή. Μερικές ειλικρινείς γραμμές για την επιχείρηση, το κοινό και αυτό που δεν λειτουργεί σήμερα αρκούν για να ξεκινήσουμε.',
+    email: 'alex@webandstyle.com',
+    footer: 'Ανεξάρτητο creative development studio · Ελλάδα / Παγκοσμίως',
+    top: 'Επιστροφή στην κορυφή ↑',
+    menu: 'Μενού',
   },
 }
 
@@ -144,10 +192,10 @@ export default function StudioLanding() {
           <button onClick={() => go('services')}>{c.nav[1]}</button>
           <button onClick={() => go('studio')}>{c.nav[2]}</button>
         </nav>
-        <button className="lang-switch" onClick={() => setLang(lang === 'en' ? 'hu' : 'en')} aria-label="Change language">
-          <span className={lang === 'en' ? 'active' : ''}>EN</span><i>/</i><span className={lang === 'hu' ? 'active' : ''}>HU</span>
+        <button className="lang-switch" onClick={() => setLang(lang === 'en' ? 'el' : lang === 'el' ? 'hu' : 'en')} aria-label="Change language">
+          <span className={lang === 'en' ? 'active' : ''}>EN</span><i>/</i><span className={lang === 'el' ? 'active' : ''}>EL</span><i>/</i><span className={lang === 'hu' ? 'active' : ''}>HU</span>
         </button>
-        <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen}>Menu</button>
+        <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen}>{c.menu}</button>
       </header>
 
       <section className="studio-hero" id="top">
@@ -224,7 +272,7 @@ export default function StudioLanding() {
         <a href={`mailto:${c.email}?subject=New%20project%20%E2%80%94%20Web%20%26%20Style`}>{c.email}<Arrow /></a>
       </section>
 
-      <footer className="studio-footer"><span>© {new Date().getFullYear()} Web & Style</span><span>{c.footer}</span><button onClick={() => go('top')}>Back to top ↑</button></footer>
+      <footer className="studio-footer"><span>© {new Date().getFullYear()} Web & Style</span><span>{c.footer}</span><button onClick={() => go('top')}>{c.top}</button></footer>
     </main>
   )
 }
