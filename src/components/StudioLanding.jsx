@@ -119,7 +119,10 @@ export default function StudioLanding() {
   useEffect(() => {
     document.documentElement.lang = lang
     const onMove = (event) => {
-      if (cursor.current) {\n        cursor.current.style.opacity = '1'\n        cursor.current.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0)`\n      }
+      if (cursor.current) {
+        cursor.current.style.opacity = '1'
+        cursor.current.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0)`
+      }
     }
     window.addEventListener('pointermove', onMove, { passive: true })
     return () => window.removeEventListener('pointermove', onMove)
